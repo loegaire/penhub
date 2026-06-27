@@ -11,6 +11,8 @@ export type CompressedObservation = {
 export async function compressObservation(input: {
   workspacePath: string
   rawOutput: string
+  rawOutputId?: string
+  idGenerator?: () => string
   maxInlineChars?: number
   maxSummaryChars?: number
 }): Promise<CompressedObservation> {
@@ -24,7 +26,7 @@ export async function compressObservation(input: {
 
   const rawDir = path.join(input.workspacePath, ".penhub", "artifacts", "raw")
   await mkdir(rawDir, { recursive: true })
-  const rawOutputPath = path.join(rawDir, `raw_${randomUUID()}.txt`)
+  const rawOutputPath = path.join(rawDir, `raw_${input.rawOutputId ?? (input.idGenerator ?? randomUUID)()}.txt`)
   await writeFile(rawOutputPath, input.rawOutput, "utf8")
   return { includeInContext: false, compressedSummary, rawOutputPath }
 }

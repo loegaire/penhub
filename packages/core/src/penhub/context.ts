@@ -1,5 +1,5 @@
 import { FileAttackStateStore } from "./state-store"
-import type { Branch, WorkspaceState } from "./types"
+import type { Branch, FailedAttempt, WorkspaceState } from "./types"
 
 export type ContextBuilderInput = {
   workspacePath: string
@@ -7,6 +7,7 @@ export type ContextBuilderInput = {
   maxHypotheses?: number
   maxBranches?: number
   maxEvidence?: number
+  maxFailedAttempts?: number
   tokenBudget?: number
 }
 
@@ -22,7 +23,9 @@ export function renderStateCard(state: WorkspaceState, input: Omit<ContextBuilde
   const maxHypotheses = input.maxHypotheses ?? (compact ? 3 : 6)
   const maxBranches = input.maxBranches ?? (compact ? 3 : 6)
   const maxEvidence = input.maxEvidence ?? (compact ? 3 : 6)
+  const maxFailedAttempts = input.maxFailedAttempts ?? (compact ? 3 : 6)
   const next = nextBranchCandidates(state.branches, maxBranches)
+  const failedAttempts = state.failedAttempts ?? []
 
   return [
     "# PenHub State Card",
@@ -66,6 +69,9 @@ export function renderStateCard(state: WorkspaceState, input: Omit<ContextBuilde
         .map((branch) => `${branch.id} - ${branch.status} - ${clip(branch.goal, maxLine)}`),
     ),
     "",
+    "## Failed Attempts",
+    ...numbered(failedAttempts.slice(0, maxFailedAttempts).map((attempt) => failedAttemptLine(attempt, maxLine))),
+    "",
     "## Evidence Summary",
     ...numbered(
       state.evidence
@@ -102,4 +108,16 @@ function nextBranchCandidates(branches: Branch[], limit: number) {
       return rightScore - leftScore || left.id.localeCompare(right.id)
     })
     .slice(0, limit)
+}
+
+function failedAttemptLine(attempt: FailedAttempt, maxLine: number) {
+  const target =
+    [
+      attempt.branchId ? `branch:${attempt.branchId}` : "",
+      attempt.hypothesisId ? `hypothesis:${attempt.hypothesisId}` : "",
+      attempt.actionId ? `action:${attempt.actionId}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ") || "unlinked"
+  return `${attempt.id} - ${target} - ${clip(attempt.summary, maxLine)} - reason: ${clip(attempt.reason, 80)}`
 }

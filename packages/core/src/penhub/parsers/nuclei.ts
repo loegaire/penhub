@@ -8,19 +8,29 @@ export type NucleiFinding = {
 }
 
 export function parseNucleiJsonl(raw: string): NucleiFinding[] {
-  return parseJsonLines<unknown>(raw)
+  return parseJsonLines(raw)
     .filter(isRecord)
     .map((item) => {
       const info = isRecord(item.info) ? item.info : {}
+      const templateId = scalarString(item["template-id"])
+      const severity = scalarString(info.severity)
+      const matchedAt = scalarString(item["matched-at"])
+      const name = scalarString(info.name)
       return {
-        ...(item["template-id"] ? { templateId: String(item["template-id"]) } : {}),
-        ...(info.severity ? { severity: String(info.severity) } : {}),
-        ...(item["matched-at"] ? { matchedAt: String(item["matched-at"]) } : {}),
-        ...(info.name ? { name: String(info.name) } : {}),
+        ...(templateId ? { templateId } : {}),
+        ...(severity ? { severity } : {}),
+        ...(matchedAt ? { matchedAt } : {}),
+        ...(name ? { name } : {}),
       }
     })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
+}
+
+function scalarString(value: unknown) {
+  if (typeof value === "string") return value
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
+  return undefined
 }

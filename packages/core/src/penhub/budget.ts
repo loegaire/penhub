@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises"
 import { statePaths } from "./state-paths"
 import { writeTokenUsage } from "./state-store"
 import { emptyTokenUsage, type TokenUsage } from "./types"
+import { normalizeTokenUsage } from "./validation"
 
 export class TokenBudgetManager {
   constructor(readonly workspacePath: string) {}
@@ -27,9 +28,9 @@ export class TokenBudgetManager {
 
   async summarize(): Promise<TokenUsage> {
     try {
-      return { ...emptyTokenUsage(), ...(JSON.parse(await readFile(statePaths(this.workspacePath).tokenUsage, "utf8")) as Partial<TokenUsage>) }
+      return normalizeTokenUsage(JSON.parse(await readFile(statePaths(this.workspacePath).tokenUsage, "utf8")))
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptyTokenUsage()
+      if (errorCode(error) === "ENOENT") return emptyTokenUsage()
       throw error
     }
   }
@@ -37,4 +38,8 @@ export class TokenBudgetManager {
 
 function increment(bucket: Record<string, number>, key: string, amount: number) {
   bucket[key] = (bucket[key] ?? 0) + amount
+}
+
+function errorCode(error: unknown) {
+  return error && typeof error === "object" ? Reflect.get(error, "code") : undefined
 }

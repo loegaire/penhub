@@ -4,11 +4,15 @@ import { FileAttackStateStore } from "./state-store"
 import type { Evidence } from "./types"
 
 export async function hashArtifact(artifactPath: string) {
-  return createHash("sha256").update(await readFile(artifactPath)).digest("hex")
+  return createHash("sha256")
+    .update(await readFile(artifactPath))
+    .digest("hex")
 }
 
 export async function recordEvidence(input: {
   workspacePath: string
+  id?: string
+  idGenerator?: () => string
   type: Evidence["type"]
   summary: string
   artifactPath?: string
@@ -18,7 +22,7 @@ export async function recordEvidence(input: {
   createdAt?: string
 }) {
   const evidence: Evidence = {
-    id: `ev_${randomUUID()}`,
+    id: input.id ?? `ev_${(input.idGenerator ?? randomUUID)()}`,
     type: input.type,
     summary: input.summary,
     supports: input.supports ?? [],

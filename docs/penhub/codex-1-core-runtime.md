@@ -44,10 +44,12 @@ packages/core/src/penhub/state-store.ts
 packages/core/src/penhub/context.ts
 packages/core/src/penhub/hypothesis-engine.ts
 packages/core/src/penhub/attack-tree.ts
+packages/core/src/penhub/planner.ts
 packages/core/src/penhub/budget.ts
 packages/core/src/penhub/contracts.ts
 packages/core/src/penhub/observation.ts
 packages/core/src/penhub/evidence.ts
+packages/core/src/penhub/validation.ts
 packages/core/src/penhub/parsers/**
 packages/core/src/penhub/index.ts
 packages/core/test/penhub/**
@@ -76,6 +78,8 @@ updateBranch(id, patch)
 listBranches(filter?)
 appendEvidence(evidence)
 listEvidence(filter?)
+appendFailedAttempt(attempt)
+listFailedAttempts(filter?)
 readWorkspaceState()
 ```
 
@@ -107,6 +111,7 @@ State layout:
 ## Open Hypotheses
 ## Confirmed Primitives
 ## Failed / Stale Branches
+## Failed Attempts
 ## Evidence Summary
 ## Token Budget
 ## Next Best Action Candidates
@@ -165,6 +170,23 @@ pruneBranches()
 selectNextBranch()
 ```
 
+### Planner Facade
+
+`planNextAction(store)` combines:
+
+```text
+readWorkspaceState()
+pruneBranches()
+selectNextBranch()
+```
+
+It returns either:
+
+```text
+{ type: "continue", branch, reason }
+{ type: "stop", reason }
+```
+
 ### Token Budget
 
 `TokenBudgetManager` tracks:
@@ -197,11 +219,14 @@ Codex 2 should extend these only when adding real typed actions.
 
 ```text
 packages/core/test/penhub/state-store.test.ts
+packages/core/test/penhub/state-validation.test.ts
 packages/core/test/penhub/context.test.ts
 packages/core/test/penhub/hypothesis-engine.test.ts
 packages/core/test/penhub/attack-tree.test.ts
 packages/core/test/penhub/budget.test.ts
+packages/core/test/penhub/evidence.test.ts
 packages/core/test/penhub/observation-parsers.test.ts
+packages/core/test/penhub/planner.test.ts
 ```
 
 Validated commands:
@@ -217,16 +242,18 @@ bun run lint
 git diff --check
 ```
 
-## Remaining Codex 1 Follow-up Work
+## Codex 1 Follow-up Status
 
-Codex 1 can continue with these tasks without blocking Codex 2 or Codex 3:
+Completed in the Codex 1 hardening pass:
 
-1. Add stricter runtime validation for state records.
-2. Add snapshot tests for `renderStateCard`.
-3. Add failed-attempt store helpers for `failed_attempts.jsonl`.
-4. Add deterministic ID injection for tests where `randomUUID()` appears indirectly.
-5. Add a small planner facade that combines `readWorkspaceState`, `pruneBranches`, and `selectNextBranch`.
-6. Add compatibility tests for malformed JSONL and missing challenge state.
+1. Stricter runtime validation for challenge, fact, hypothesis, branch, evidence, failed-attempt, and token-usage records.
+2. Stable exact-output test for `renderStateCard`.
+3. Failed-attempt store helpers for `failed_attempts.jsonl`.
+4. Deterministic ID injection for `HypothesisEngine`, `recordEvidence`, and `compressObservation`.
+5. Planner facade combining `readWorkspaceState`, `pruneBranches`, and `selectNextBranch`.
+6. Compatibility tests for malformed JSONL, invalid persisted schema, and missing challenge state.
+
+Remaining Codex 1 work should be limited to bug fixes or small compatibility additions discovered by Codex 2 or Codex 3.
 
 Keep these changes inside:
 
@@ -273,4 +300,3 @@ Codex 3 should use fixtures or sample state for UI until Codex 2 action/report o
 - PenHub tests pass.
 - Core typecheck passes.
 - Root typecheck passes before push.
-

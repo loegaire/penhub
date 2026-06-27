@@ -63,6 +63,16 @@ export type Evidence = {
   createdAt: string
 }
 
+export type FailedAttempt = {
+  id: string
+  summary: string
+  reason: string
+  branchId?: string
+  hypothesisId?: string
+  actionId?: string
+  createdAt: string
+}
+
 export type TokenUsage = {
   totalInputTokens: number
   totalOutputTokens: number
@@ -79,6 +89,7 @@ export type WorkspaceState = {
   hypotheses: Hypothesis[]
   branches: Branch[]
   evidence: Evidence[]
+  failedAttempts: FailedAttempt[]
   tokenUsage: TokenUsage
 }
 
@@ -87,9 +98,21 @@ export type StateFilter = {
   status?: string | string[]
   branchId?: string
   hypothesisId?: string
+  actionId?: string
   evidenceId?: string
   limit?: number
 }
+
+export type PlannerDecision =
+  | {
+      type: "continue"
+      branch: Branch
+      reason: string
+    }
+  | {
+      type: "stop"
+      reason: string
+    }
 
 export const emptyTokenUsage = (): TokenUsage => ({
   totalInputTokens: 0,

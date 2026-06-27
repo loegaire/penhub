@@ -14,6 +14,7 @@ export class HypothesisEngine {
   constructor(
     private readonly store: AttackStateStore,
     private readonly now: () => string = () => new Date().toISOString(),
+    private readonly idGenerator: () => string = randomUUID,
   ) {}
 
   async create(input: {
@@ -25,7 +26,7 @@ export class HypothesisEngine {
   }) {
     const timestamp = this.now()
     const hypothesis: Hypothesis = {
-      id: `hyp_${randomUUID()}`,
+      id: `hyp_${this.idGenerator()}`,
       claim: input.claim,
       status: "open",
       requiredEvidence: input.requiredEvidence,
