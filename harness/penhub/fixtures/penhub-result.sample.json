@@ -1,0 +1,20 @@
+{
+  "runner": "penhub",
+  "caseId": "local-web-chain-001",
+  "model": "sample-model",
+  "startedAt": "2026-06-27T08:00:00.000Z",
+  "finishedAt": "2026-06-27T08:05:00.000Z",
+  "success": true,
+  "flagFound": true,
+  "timeToFlagSeconds": 240,
+  "totalTokens": 30000,
+  "toolCallsCount": 10,
+  "repeatedActionsCount": 1,
+  "failedBranchCount": 1,
+  "humanInterventionsCount": 0,
+  "evidenceItemsCount": 6,
+  "reportGenerated": true,
+  "reportReplayabilityScore": 0.8,
+  "notes": ["Sample PenHub fixture. Not a measured product result."],
+  "isSampleData": true
+}

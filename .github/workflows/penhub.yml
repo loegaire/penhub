@@ -1,0 +1,63 @@
+name: penhub
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  penhub:
+    name: penhub checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Run PenHub core tests
+        working-directory: packages/core
+        run: bun test test/penhub
+
+      - name: Typecheck PenHub core
+        working-directory: packages/core
+        run: bun typecheck
+
+      - name: Typecheck app
+        working-directory: packages/app
+        run: bun typecheck
+
+      - name: Run PenHub app tests
+        working-directory: packages/app
+        run: bun test --preload ./happydom.ts ./src/features/penhub/state
+
+      - name: Run benchmark comparison tests
+        working-directory: benchmarks/penhub
+        run: bun test ./metrics/comparison.test.ts
+
+      - name: Run ownership tests
+        working-directory: scripts/penhub
+        run: bun test ./ownership.test.ts
+
+      - name: Run benchmark smoke
+        run: bun run harness/penhub/smoke/smoke-run.ts
+
+      - name: Check Codex 3 ownership
+        if: contains(github.head_ref, 'codex3') || contains(github.head_ref, '3-ui-benchmark')
+        env:
+          CODEX_ID: "3"
+          PENHUB_OWNERSHIP_BASE: origin/codex/1-core-runtime
+        run: bun run scripts/penhub/check-ownership.ts
+
+      - name: Check whitespace
+        run: git diff --check
