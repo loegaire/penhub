@@ -281,6 +281,17 @@ export const samplePenHubWorkspace: PenHubWorkspaceFixture = {
         createdAt,
       },
     ],
+    failedAttempts: [
+      {
+        id: "fail_password_spray",
+        summary: "Credential spray branch stopped after rate limiting appeared.",
+        reason: "The API returned 429 responses after five repeated attempts.",
+        branchId: "branch_password_spray",
+        hypothesisId: "hyp_password_spray",
+        actionId: "action_password_spray",
+        createdAt,
+      },
+    ],
     tokenUsage: {
       totalInputTokens: 18_000,
       totalOutputTokens: 12_000,

@@ -50,10 +50,14 @@ const ownershipRules: Record<CodexId, OwnershipRule> = {
 }
 
 export function checkOwnedPaths(input: { codexId: string; changedFiles: string[] }) {
-  const rule = ownershipRules[input.codexId as CodexId]
-  if (!rule) throw new Error("CODEX_ID must be 1, 2, or 3")
+  if (!isCodexId(input.codexId)) throw new Error("CODEX_ID must be 1, 2, or 3")
+  const rule = ownershipRules[input.codexId]
 
   return input.changedFiles.filter((file) => isBlocked(file, rule) || !isAllowed(file, rule))
+}
+
+function isCodexId(value: string): value is CodexId {
+  return value === "1" || value === "2" || value === "3"
 }
 
 function isAllowed(file: string, rule: OwnershipRule) {

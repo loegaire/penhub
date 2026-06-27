@@ -1,5 +1,5 @@
 import { compareBenchmarkRuns, renderBenchmarkReport } from "../metrics/comparison"
-import type { BenchmarkRunResult } from "../metrics/schema"
+import { parseBenchmarkRunResult } from "../metrics/schema"
 
 const [baselinePath, penhubPath] = Bun.argv.slice(2)
 
@@ -8,7 +8,7 @@ if (!baselinePath || !penhubPath) {
   process.exit(1)
 }
 
-const baseline = (await Bun.file(baselinePath).json()) as BenchmarkRunResult
-const penhub = (await Bun.file(penhubPath).json()) as BenchmarkRunResult
+const baseline = parseBenchmarkRunResult(await Bun.file(baselinePath).json())
+const penhub = parseBenchmarkRunResult(await Bun.file(penhubPath).json())
 
 console.log(renderBenchmarkReport(compareBenchmarkRuns({ baseline, penhub })))
