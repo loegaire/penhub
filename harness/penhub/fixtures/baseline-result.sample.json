@@ -1,0 +1,16 @@
+{
+  "runner": "opencode-baseline",
+  "caseId": "local-web-chain-001",
+  "model": "sample-model",
+  "startedAt": "2026-06-27T08:00:00.000Z",
+  "finishedAt": "2026-06-27T08:07:30.000Z",
+  "success": false,
+  "flagFound": false,
+  "totalTokens": 42000,
+  "toolCallsCount": 16,
+  "repeatedActionsCount": 5,
+  "humanInterventionsCount": 2,
+  "reportGenerated": false,
+  "notes": ["Sample OpenCode baseline fixture. Not a measured product result."],
+  "isSampleData": true
+}

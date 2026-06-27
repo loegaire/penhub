@@ -65,6 +65,7 @@ import Session from "@/pages/session"
 import { NewHome, LegacyHome } from "@/pages/home"
 
 const NewSession = lazy(() => import("@/pages/new-session"))
+const PenHubWorkspace = lazy(() => import("@/features/penhub/PenHubWorkspace"))
 
 const SessionRoute = () => {
   const settings = useSettings()
@@ -595,6 +596,7 @@ function Routes() {
     <>
       <Route component={LegacyServerLayout}>
         <Show when={!settings.general.newLayoutDesigns()}>{<Route path="/" component={LegacyHome} />}</Show>
+        <Route path="/penhub" component={PenHubWorkspace} />
         <Route path="/:dir" component={DirectoryLayout}>
           <Route path="/" component={() => <Navigate href="session" />} />
           <Route path="/session/:id?" component={SessionRoute} />
@@ -602,6 +604,7 @@ function Routes() {
       </Route>
       <Show when={settings.general.newLayoutDesigns()}>
         <Route path="/" component={NewHome} />
+        <Route path="/penhub" component={PenHubWorkspace} />
         <Route path="/:dir/session/:id" component={LegacyTargetSessionRoute} />
       </Show>
       <Route path="/new-session" component={DraftRoute} />

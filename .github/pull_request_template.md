@@ -15,7 +15,21 @@ Please provide a description of the issue, the changes you made to fix it, and w
 
 **If you paste a large clearly AI generated description here your PR may be IGNORED or CLOSED!**
 
+### PenHub Ownership
+
+Codex:
+
+Owned paths changed:
+
+Shared paths changed:
+
 ### How did you verify your code works?
+
+### Benchmark Data
+
+Sample data only:
+
+Measured run:
 
 ### Screenshots / recordings
 
