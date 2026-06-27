@@ -4,6 +4,14 @@
 - The default branch in this repo is `dev`.
 - Local `main` ref may not exist; use `dev` or `origin/dev` for diffs.
 
+## PenHub Fork Guidance
+
+- PenHub must remain an OpenCode-derived runtime. Extend existing OpenCode packages instead of building a separate platform beside them.
+- Phase 1 PenHub core lives under `packages/core/src/penhub` with tests under `packages/core/test/penhub`.
+- Do not add FastAPI, PostgreSQL, Redis, Temporal, MinIO, vector databases, external LLM calls, or network-only tests for the initial PenHub runtime.
+- Do not inject raw tool output or long logs into context. Store raw data as `.penhub/artifacts` and pass compact state cards into the model loop.
+- Benchmark fixtures and reports must be marked as sample data unless they come from a controlled run.
+
 ## Branch Names
 
 Use a short branch name of at most three words, separated by hyphens. Do not use slashes or type prefixes such as `feat/` or `fix/`.
