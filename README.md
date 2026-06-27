@@ -1,129 +1,172 @@
-<p align="center">
-  <a href="https://opencode.ai">
-    <picture>
-      <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
-      <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
-    </picture>
-  </a>
-</p>
-<p align="center">The open source AI coding agent.</p>
-<p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
-</p>
+# PenHub
 
-<p align="center">
-  <a href="README.md">English</a> |
-  <a href="README.zh.md">简体中文</a> |
-  <a href="README.zht.md">繁體中文</a> |
-  <a href="README.ko.md">한국어</a> |
-  <a href="README.de.md">Deutsch</a> |
-  <a href="README.es.md">Español</a> |
-  <a href="README.fr.md">Français</a> |
-  <a href="README.it.md">Italiano</a> |
-  <a href="README.da.md">Dansk</a> |
-  <a href="README.ja.md">日本語</a> |
-  <a href="README.pl.md">Polski</a> |
-  <a href="README.ru.md">Русский</a> |
-  <a href="README.bs.md">Bosanski</a> |
-  <a href="README.ar.md">العربية</a> |
-  <a href="README.no.md">Norsk</a> |
-  <a href="README.br.md">Português (Brasil)</a> |
-  <a href="README.th.md">ไทย</a> |
-  <a href="README.tr.md">Türkçe</a> |
-  <a href="README.uk.md">Українська</a> |
-  <a href="README.bn.md">বাংলা</a> |
-  <a href="README.gr.md">Ελληνικά</a> |
-  <a href="README.vi.md">Tiếng Việt</a>
-</p>
+PenHub is an OpenCode-derived runtime for CTF and local pentest lab workflows.
 
-[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
+The goal is to keep OpenCode's strong CLI, app, server, session, and tool foundations, while changing the agent loop from generic coding assistance into a pentest-native state machine:
 
----
-
-### Installation
-
-```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
-
-# Package managers
-npm i -g opencode-ai@latest        # or bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
-brew install opencode              # macOS and Linux (official brew formula, updated less)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
-mise use -g opencode               # Any OS
-nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev branch
+```text
+Challenge
+-> Facts
+-> Hypotheses
+-> Attack branches
+-> Evidence
+-> Failed attempts
+-> Token budget
+-> Compact state card
+-> Next best action
 ```
 
-> [!TIP]
-> Remove versions older than 0.1.x before installing.
+PenHub is not a new platform around OpenCode. Phase 1 extends the existing OpenCode monorepo with typed actions, attack-state memory, observation compression, evidence-first reporting, and benchmark support.
 
-### Desktop App (BETA)
+## Current Branches
 
-OpenCode is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).
+The active PenHub core branch is:
 
-| Platform              | Download                           |
-| --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe` |
-| Linux                 | `.deb`, `.rpm`, or `.AppImage`     |
-
-```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+```text
+codex/1-core-runtime
 ```
 
-#### Installation Directory
+Remote layout:
 
-The install script respects the following priority order for the installation path:
-
-1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
-3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.opencode/bin` - Default fallback
-
-```bash
-# Examples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+```text
+origin   https://github.com/kyrux29/PentHub.git
+upstream https://github.com/anomalyco/opencode.git
 ```
 
-### Agents
+Codex 2 and Codex 3 should branch from `origin/codex/1-core-runtime`, not raw upstream `dev`.
 
-OpenCode includes two built-in agents you can switch between with the `Tab` key.
+## Implemented Core
 
-- **build** - Default, full-access agent for development work
-- **plan** - Read-only agent for analysis and code exploration
-  - Denies file edits by default
-  - Asks permission before running bash commands
-  - Ideal for exploring unfamiliar codebases or planning changes
+PenHub core runtime currently lives in:
 
-Also included is a **general** subagent for complex searches and multistep tasks.
-This is used internally and can be invoked using `@general` in messages.
+```text
+packages/core/src/penhub/**
+packages/core/test/penhub/**
+.opencode/tool/penhub-init-challenge.ts
+.opencode/tool/penhub-state-card.ts
+```
 
-Learn more about [agents](https://opencode.ai/docs/agents).
+Implemented pieces:
 
-### Documentation
+- core PenHub challenge, fact, hypothesis, branch, evidence, token, and workspace state types
+- JSONL-backed `.penhub/state` persistence
+- compact PenHub State Card builder
+- hypothesis lifecycle engine
+- branch scoring, ranking, pruning, and next-branch selection
+- token budget manager
+- observation compression and artifact-backed raw output storage
+- evidence recording and artifact hashing
+- parsers for HTTP, ffuf JSON, and nuclei JSONL
+- OpenCode custom tools for challenge init and state-card generation
 
-For more info on how to configure OpenCode, [**head over to our docs**](https://opencode.ai/docs).
+## State Layout
 
-### Contributing
+PenHub creates local challenge state under:
 
-If you're interested in contributing to OpenCode, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
+```text
+.penhub/
+  state/
+    challenge.json
+    facts.jsonl
+    hypotheses.jsonl
+    branches.jsonl
+    evidence.jsonl
+    failed_attempts.jsonl
+    token_usage.json
+    report.md
+  artifacts/
+  tmp/
+```
 
-### Building on OpenCode
+Raw tool output must not be inserted directly into context. Store it as an artifact and pass compact summaries or evidence capsules into the model loop.
 
-If you are working on a project that's related to OpenCode and is using "opencode" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the OpenCode team and is not affiliated with us in any way.
+## Setup
 
----
+This repo follows OpenCode's Bun-based workspace.
 
-**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+```bash
+bun install
+```
+
+If Bun is not installed:
+
+```bash
+curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.14"
+```
+
+## Validation
+
+Fast PenHub validation:
+
+```bash
+cd packages/core
+bun test test/penhub
+bun typecheck
+```
+
+Full workspace typecheck:
+
+```bash
+bun run typecheck
+```
+
+Repository whitespace check:
+
+```bash
+git diff --check
+```
+
+## Parallel Codex Work
+
+Read these before starting another agent:
+
+- [PenHub Architecture](docs/penhub/architecture.md)
+- [Agent Handoff](docs/penhub/agent-handoff.md)
+- [Module Ownership](docs/penhub/module-ownership.md)
+- [Codex 2 - Actions, Evidence, Replay, Report](docs/penhub/codex-2-actions-evidence-report.md)
+- [Codex 3 - UI, Benchmark, Integration](docs/penhub/codex-3-ui-benchmark-integration.md)
+- [Git Conflict Runbook](docs/penhub/git-conflict-runbook.md)
+- [Deep Research Report](docs/penhub/deep-research-report%20(1).md)
+
+Create separate worktrees:
+
+```bash
+git fetch origin
+git worktree add ../penhub-worktrees/codex-2-actions -b codex/2-actions-evidence-report origin/codex/1-core-runtime
+git worktree add ../penhub-worktrees/codex-3-ui-benchmark -b codex/3-ui-benchmark-integration origin/codex/1-core-runtime
+```
+
+Do not push to:
+
+```text
+main
+dev
+another agent's branch
+```
+
+## Phase 1 Constraints
+
+Do not add these to runtime Phase 1 unless benchmark evidence proves they are needed:
+
+```text
+FastAPI
+PostgreSQL
+Redis
+Temporal
+MinIO
+vector databases
+external LLM calls in tests
+network-only tests
+```
+
+Use OpenCode's existing packages and integration surfaces first.
+
+## Upstream Attribution
+
+PenHub is derived from OpenCode and keeps OpenCode's upstream architecture and package layout. OpenCode is maintained at:
+
+```text
+https://github.com/anomalyco/opencode
+```
+
+This fork is maintained for PenHub-specific CTF and local pentest runtime work.
