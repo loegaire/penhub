@@ -49,6 +49,7 @@ Use these docs before starting the next agents:
 
 - `docs/penhub/agent-handoff.md`
 - `docs/penhub/module-ownership.md`
+- `docs/penhub/codex-1-core-runtime.md`
 - `docs/penhub/codex-2-actions-evidence-report.md`
 - `docs/penhub/codex-3-ui-benchmark-integration.md`
 - `docs/penhub/git-conflict-runbook.md`

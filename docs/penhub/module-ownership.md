@@ -6,6 +6,12 @@ These ownership rules are for parallel Codex work. They are stricter than normal
 
 Status: implemented on `codex/1-core-runtime`.
 
+Detailed guide:
+
+```text
+docs/penhub/codex-1-core-runtime.md
+```
+
 Owned paths:
 
 ```text
@@ -137,4 +143,3 @@ packages/core/test/penhub/**
 - Do not update `bun.lock` unless a new dependency is truly required.
 - Prefer OpenCode's existing dependencies before adding new ones.
 - If two agents need the same shared file, one agent should open a small integration PR first, then the other rebases.
-
