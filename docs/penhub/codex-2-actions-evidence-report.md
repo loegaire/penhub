@@ -14,6 +14,8 @@ Base:
 origin/codex/1-core-runtime
 ```
 
+Status: implemented on `codex/2-actions-evidence-report`.
+
 ## Mission
 
 Implement the typed action layer that makes PenHub behave like a disciplined CTF or local pentest agent:
@@ -25,6 +27,48 @@ Implement the typed action layer that makes PenHub behave like a disciplined CTF
 - reports are generated from state/evidence, not from chat transcript
 
 Do not implement real exploit payloads. Keep actions safe for local CTF/lab workflows.
+
+## Implemented Paths
+
+```text
+packages/core/src/penhub/action-runtime/**
+packages/core/src/penhub/actions/**
+packages/core/src/penhub/report/**
+packages/core/src/penhub/replay/**
+packages/core/test/penhub/action-runtime/**
+packages/core/test/penhub/actions/**
+packages/core/test/penhub/report/**
+packages/core/test/penhub/replay/**
+packages/core/test/penhub/evidence-recorder.test.ts
+.opencode/tool/penhub-http-probe.ts
+.opencode/tool/penhub-dir-fuzz.ts
+.opencode/tool/penhub-vuln-scan.ts
+.opencode/tool/penhub-api-fuzz.ts
+.opencode/tool/penhub-evidence-capture.ts
+.opencode/tool/penhub-report-generate.ts
+```
+
+## Implemented Actions
+
+The default registry includes:
+
+```text
+inspect_tree
+summarize_files
+extract_routes
+extract_inputs
+extract_sinks
+run_local_app
+send_request
+compare_responses
+inspect_logs
+record_evidence
+update_hypothesis
+generate_report
+dir_fuzz
+```
+
+`send_request` and `dir_fuzz` are localhost-only. Static scanning actions do not execute payloads.
 
 ## Start Commands
 
@@ -169,6 +213,12 @@ packages/core/test/penhub/replay/replay-builder.test.ts
 packages/core/test/penhub/report/markdown-report.test.ts
 ```
 
+Current PenHub test suite includes Codex 1 and Codex 2 coverage:
+
+```text
+28 tests across 15 files
+```
+
 Required checks before push:
 
 ```bash
@@ -190,4 +240,3 @@ git diff --check
 - Evidence links to branch/hypothesis where applicable.
 - Reports are generated from structured state.
 - Tests pass.
-

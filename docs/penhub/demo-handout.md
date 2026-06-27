@@ -1,11 +1,11 @@
 # PenHub Demo Handout
 
-Last verified: 2026-06-27 on branch `codex/1-core-runtime`.
+Last verified: 2026-06-27 on branch `codex/2-actions-evidence-report`.
 
-Current good commit:
+Current baseline:
 
 ```text
-a3e892022 feat(core): harden penhub runtime state
+origin/codex/1-core-runtime plus Codex 2 action/evidence/replay/report implementation
 ```
 
 ## 1. Setup
@@ -14,8 +14,8 @@ Run from repo root:
 
 ```bash
 cd /home/kyrux/Downloads/PentHub
-git checkout codex/1-core-runtime
-git pull --ff-only origin codex/1-core-runtime
+git fetch origin
+git checkout codex/2-actions-evidence-report
 export PATH=/home/kyrux/.bun/bin:$PATH
 ```
 
@@ -42,7 +42,7 @@ git diff --check
 Expected result:
 
 ```text
-PenHub tests: 19 pass, 0 fail
+PenHub tests: 28 pass, 0 fail
 Scoped PenHub lint: 0 warnings, 0 errors
 Root typecheck: 29 successful, 29 total
 git diff --check: no output
