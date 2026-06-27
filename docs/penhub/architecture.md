@@ -42,3 +42,13 @@ The next changes should wire these core modules into OpenCode surfaces instead o
 - optional server namespace for UI/harness reads, such as `/penhub/session/:id/state`
 - app panels inside `packages/app` for attack graph, hypotheses, evidence, token budget, and report preview
 - benchmark harness that compares upstream OpenCode against PenHub with the same model, target, wall time, and token ceiling
+
+## Parallel Agent Docs
+
+Use these docs before starting the next agents:
+
+- `docs/penhub/agent-handoff.md`
+- `docs/penhub/module-ownership.md`
+- `docs/penhub/codex-2-actions-evidence-report.md`
+- `docs/penhub/codex-3-ui-benchmark-integration.md`
+- `docs/penhub/git-conflict-runbook.md`
