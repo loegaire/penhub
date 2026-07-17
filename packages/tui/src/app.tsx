@@ -26,6 +26,7 @@ import {
 import { TuiPathsProvider, TuiStartupProvider, TuiTerminalEnvironmentProvider, useTuiStartup } from "./context/runtime"
 import { DialogProvider, useDialog } from "./ui/dialog"
 import { DialogProvider as DialogProviderList } from "./component/dialog-provider"
+import { DialogProviderLogout } from "./component/dialog-provider-logout"
 import { ErrorComponent } from "./component/error-component"
 import { PluginRouteMissing } from "./component/plugin-route-missing"
 import { ProjectProvider, useProject } from "./context/project"
@@ -724,6 +725,15 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         slashName: "connect",
         run: () => {
           dialog.replace(() => <DialogProviderList />)
+        },
+        category: "Provider",
+      },
+      {
+        name: "provider.logout",
+        title: "Log out of provider",
+        slashName: "logout",
+        run: () => {
+          dialog.replace(() => <DialogProviderLogout />)
         },
         category: "Provider",
       },

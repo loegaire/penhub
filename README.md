@@ -73,6 +73,9 @@ On first launch:
 3. Enter `/models` to select the model used for new sessions.
 4. Open a workspace and start a session.
 
+To remove a stored provider login, enter `/logout` and select the account. Providers supplied only through environment
+variables are not shown because PenHub does not own those credentials.
+
 `bun run dev` remains an alias for `bun run tui`.
 
 Useful service commands:
