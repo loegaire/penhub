@@ -28,10 +28,8 @@ import { SkillV2 } from "../skill"
 import { State } from "../state"
 import { FetchHttpClient, HttpClient } from "effect/unstable/http"
 import { AgentPlugin } from "./agent"
-import { CommandPlugin } from "./command"
 import { ModelsDevPlugin } from "./models-dev"
 import { ProviderPlugins } from "./provider"
-import { SkillPlugin } from "./skill"
 import { VariantPlugin } from "./variant"
 
 export type Requirements =
@@ -109,8 +107,6 @@ const layer = Layer.effectDiscard(
       Effect.gen(function* () {
         yield* add(ConfigReferencePlugin.Plugin)
         yield* add(AgentPlugin.Plugin)
-        yield* add(CommandPlugin.Plugin)
-        yield* add(SkillPlugin.Plugin)
         yield* add(ModelsDevPlugin)
         yield* add(ConfigAgentPlugin.Plugin)
         yield* add(ConfigCommandPlugin.Plugin)

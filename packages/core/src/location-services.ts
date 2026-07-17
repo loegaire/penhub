@@ -19,14 +19,13 @@ import { PermissionV2 } from "./permission"
 import { PluginV2 } from "./plugin"
 import { PluginInternal } from "./plugin/internal"
 import { Policy } from "./policy"
-import { ProjectCopy } from "./project/copy"
 import { Pty } from "./pty"
 import { QuestionV2 } from "./question"
 import { Reference } from "./reference"
 import { ReferenceGuidance } from "./reference/guidance"
 import * as SessionRunnerLLM from "./session/runner/llm"
 import { SessionRunnerModel } from "./session/runner/model"
-import { SessionTodo } from "./session/todo"
+import { PenHubSystemContext } from "./penhub/system-context"
 import { SkillV2 } from "./skill"
 import { SkillGuidance } from "./skill/guidance"
 import { Snapshot } from "./snapshot"
@@ -51,8 +50,6 @@ export const locationServices = LayerNode.group([
   AISDK.node,
   PluginV2.node,
   PluginInternal.node,
-  ProjectCopy.node,
-  ProjectCopy.refreshNode,
   FileSystemSearch.node,
   FileSystem.node,
   Watcher.node,
@@ -60,6 +57,7 @@ export const locationServices = LayerNode.group([
   SkillV2.node,
   SystemContextRegistry.node,
   SystemContextBuiltIns.node,
+  PenHubSystemContext.node,
   LocationMutation.node,
   FileMutation.node,
   PermissionV2.node,
@@ -69,7 +67,6 @@ export const locationServices = LayerNode.group([
   Image.node,
   SkillGuidance.node,
   ReferenceGuidance.node,
-  SessionTodo.node,
   QuestionV2.node,
   ReadToolFileSystem.node,
   BuiltInTools.node,

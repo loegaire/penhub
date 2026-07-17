@@ -65,9 +65,30 @@ const setPinchZoomEnabled = (enabled: boolean) => {
   return window.api.setPinchZoomEnabled(enabled)
 }
 
-const resetZoom = () => applyZoom(1)
-const zoomIn = () => applyZoom(clamp(requestedZoom + 0.2))
-const zoomOut = () => applyZoom(clamp(requestedZoom - 0.2))
+const adjustPenHubFont = (action: "in" | "out" | "reset") => {
+  if (!document.querySelector(".penhub")) return false
+  if (requestedZoom !== 1) applyZoom(1)
+  window.dispatchEvent(new CustomEvent("penhub:font-zoom", { detail: action }))
+  return true
+}
+
+const resetZoom = () => {
+  if (adjustPenHubFont("reset")) return
+  applyZoom(1)
+}
+const zoomIn = () => {
+  if (adjustPenHubFont("in")) return
+  applyZoom(clamp(requestedZoom + 0.2))
+}
+const zoomOut = () => {
+  if (adjustPenHubFont("out")) return
+  applyZoom(clamp(requestedZoom - 0.2))
+}
+
+window.addEventListener("penhub:activated", () => {
+  if (requestedZoom === 1) return
+  applyZoom(1)
+})
 
 const resetWheelPinch = () => {
   clearTimeout(wheelPinch?.timeout)

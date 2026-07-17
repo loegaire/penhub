@@ -1,0 +1,11 @@
+PenHub là một AI  agent pentest: thay vì chỉ chat và gọi bash, nó dùng planner, typed tools, attack state, evidence và report. 
+
+Gửi cho nó một mục tiêu, nó sẽ bị xâm nhập bởi PenHub
+
+PenHub ép hành động qua typed actions, lưu raw output thành artifact, nén quan sát thành state, rồi sinh report từ Evidence Capsules thay vì transcript. 
+
+Đồng thời cung cấp trải nghiệm web thân thiện hơn: thay chat transcript dài bằng Attack Workspace, Evidence Explorer, Report Builder, Benchmark Runs, AttackGraph, BudgetPanel, EvidencePanel và ReportPane. 
+
+
+
+

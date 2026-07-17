@@ -33,6 +33,50 @@ import type {
   SessionsMessageInput,
   SessionsMessageOutput,
   EventsSubscribeOutput,
+  ServerModelListInput,
+  ServerModelListOutput,
+  ServerProviderListInput,
+  ServerProviderListOutput,
+  ServerProviderGetInput,
+  ServerProviderGetOutput,
+  ServerIntegrationListInput,
+  ServerIntegrationListOutput,
+  ServerIntegrationGetInput,
+  ServerIntegrationGetOutput,
+  ServerIntegrationKeyInput,
+  ServerIntegrationKeyOutput,
+  ServerIntegrationOauthInput,
+  ServerIntegrationOauthOutput,
+  ServerIntegrationStatusInput,
+  ServerIntegrationStatusOutput,
+  ServerIntegrationCompleteInput,
+  ServerIntegrationCompleteOutput,
+  ServerIntegrationCancelInput,
+  ServerIntegrationCancelOutput,
+  ServerCredentialUpdateInput,
+  ServerCredentialUpdateOutput,
+  ServerCredentialRemoveInput,
+  ServerCredentialRemoveOutput,
+  ServerCommandListInput,
+  ServerCommandListOutput,
+  ServerSkillListInput,
+  ServerSkillListOutput,
+  ServerLocationGetInput,
+  ServerLocationGetOutput,
+  ServerReferenceListInput,
+  ServerReferenceListOutput,
+  ServerPenhubListInput,
+  ServerPenhubListOutput,
+  ServerPenhubGetInput,
+  ServerPenhubGetOutput,
+  ServerPenhubGenerateInput,
+  ServerPenhubGenerateOutput,
+  ServerPenhubPullInput,
+  ServerPenhubPullOutput,
+  ServerPenhubStatusOutput,
+  ServerPenhubStartInput,
+  ServerPenhubStartOutput,
+  ServerPenhubStopOutput,
 } from "./types"
 import { ClientError } from "./client-error"
 
@@ -378,6 +422,302 @@ export function make(options: ClientOptions) {
       subscribe: (requestOptions?: RequestOptions): AsyncIterable<EventsSubscribeOutput> =>
         sse<EventsSubscribeOutput>(
           { method: "GET", path: `/api/event`, successStatus: 200, declaredStatuses: [401, 400], empty: false },
+          requestOptions,
+        ),
+    },
+    "server.model": {
+      list: (input?: ServerModelListInput, requestOptions?: RequestOptions) =>
+        request<ServerModelListOutput>(
+          {
+            method: "GET",
+            path: `/api/model`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [503, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "server.provider": {
+      list: (input?: ServerProviderListInput, requestOptions?: RequestOptions) =>
+        request<ServerProviderListOutput>(
+          {
+            method: "GET",
+            path: `/api/provider`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [503, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: ServerProviderGetInput, requestOptions?: RequestOptions) =>
+        request<ServerProviderGetOutput>(
+          {
+            method: "GET",
+            path: `/api/provider/${encodeURIComponent(input.providerID)}`,
+            query: { location: input.location },
+            successStatus: 200,
+            declaredStatuses: [404, 503, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "server.integration": {
+      list: (input?: ServerIntegrationListInput, requestOptions?: RequestOptions) =>
+        request<ServerIntegrationListOutput>(
+          {
+            method: "GET",
+            path: `/api/integration`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: ServerIntegrationGetInput, requestOptions?: RequestOptions) =>
+        request<ServerIntegrationGetOutput>(
+          {
+            method: "GET",
+            path: `/api/integration/${encodeURIComponent(input.integrationID)}`,
+            query: { location: input.location },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      key: (input: ServerIntegrationKeyInput, requestOptions?: RequestOptions) =>
+        request<ServerIntegrationKeyOutput>(
+          {
+            method: "POST",
+            path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/key`,
+            query: { location: input.location },
+            body: { key: input.key, label: input.label },
+            successStatus: 204,
+            declaredStatuses: [400, 401],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      oauth: (input: ServerIntegrationOauthInput, requestOptions?: RequestOptions) =>
+        request<ServerIntegrationOauthOutput>(
+          {
+            method: "POST",
+            path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth`,
+            query: { location: input.location },
+            body: { methodID: input.methodID, inputs: input.inputs, label: input.label },
+            successStatus: 200,
+            declaredStatuses: [400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      status: (input: ServerIntegrationStatusInput, requestOptions?: RequestOptions) =>
+        request<ServerIntegrationStatusOutput>(
+          {
+            method: "GET",
+            path: `/api/integration/attempt/${encodeURIComponent(input.attemptID)}`,
+            query: { location: input.location },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      complete: (input: ServerIntegrationCompleteInput, requestOptions?: RequestOptions) =>
+        request<ServerIntegrationCompleteOutput>(
+          {
+            method: "POST",
+            path: `/api/integration/attempt/${encodeURIComponent(input.attemptID)}/complete`,
+            query: { location: input.location },
+            body: { code: input.code },
+            successStatus: 204,
+            declaredStatuses: [400, 401],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      cancel: (input: ServerIntegrationCancelInput, requestOptions?: RequestOptions) =>
+        request<ServerIntegrationCancelOutput>(
+          {
+            method: "DELETE",
+            path: `/api/integration/attempt/${encodeURIComponent(input.attemptID)}`,
+            query: { location: input.location },
+            successStatus: 204,
+            declaredStatuses: [401, 400],
+            empty: true,
+          },
+          requestOptions,
+        ),
+    },
+    "server.credential": {
+      update: (input: ServerCredentialUpdateInput, requestOptions?: RequestOptions) =>
+        request<ServerCredentialUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/api/credential/${encodeURIComponent(input.credentialID)}`,
+            query: { location: input.location },
+            body: { label: input.label },
+            successStatus: 204,
+            declaredStatuses: [401, 400],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      remove: (input: ServerCredentialRemoveInput, requestOptions?: RequestOptions) =>
+        request<ServerCredentialRemoveOutput>(
+          {
+            method: "DELETE",
+            path: `/api/credential/${encodeURIComponent(input.credentialID)}`,
+            query: { location: input.location },
+            successStatus: 204,
+            declaredStatuses: [401, 400],
+            empty: true,
+          },
+          requestOptions,
+        ),
+    },
+    "server.command": {
+      list: (input?: ServerCommandListInput, requestOptions?: RequestOptions) =>
+        request<ServerCommandListOutput>(
+          {
+            method: "GET",
+            path: `/api/command`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "server.skill": {
+      list: (input?: ServerSkillListInput, requestOptions?: RequestOptions) =>
+        request<ServerSkillListOutput>(
+          {
+            method: "GET",
+            path: `/api/skill`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "server.location": {
+      get: (input?: ServerLocationGetInput, requestOptions?: RequestOptions) =>
+        request<ServerLocationGetOutput>(
+          {
+            method: "GET",
+            path: `/api/location`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "server.reference": {
+      list: (input?: ServerReferenceListInput, requestOptions?: RequestOptions) =>
+        request<ServerReferenceListOutput>(
+          {
+            method: "GET",
+            path: `/api/reference`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "server.penhub": {
+      list: (input?: ServerPenhubListInput, requestOptions?: RequestOptions) =>
+        request<ServerPenhubListOutput>(
+          {
+            method: "GET",
+            path: `/api/penhub/tools`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input?: ServerPenhubGetInput, requestOptions?: RequestOptions) =>
+        request<ServerPenhubGetOutput>(
+          {
+            method: "GET",
+            path: `/api/penhub/state`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      generate: (input?: ServerPenhubGenerateInput, requestOptions?: RequestOptions) =>
+        request<ServerPenhubGenerateOutput>(
+          {
+            method: "POST",
+            path: `/api/penhub/report`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [503, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      pull: (input: ServerPenhubPullInput, requestOptions?: RequestOptions) =>
+        request<ServerPenhubPullOutput>(
+          {
+            method: "POST",
+            path: `/api/penhub/tools/${encodeURIComponent(input.pack)}/pull`,
+            query: { location: input.location },
+            successStatus: 200,
+            declaredStatuses: [503, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      status: (requestOptions?: RequestOptions) =>
+        request<ServerPenhubStatusOutput>(
+          {
+            method: "GET",
+            path: `/api/penhub/litellm`,
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      start: (input: ServerPenhubStartInput, requestOptions?: RequestOptions) =>
+        request<ServerPenhubStartOutput>(
+          {
+            method: "POST",
+            path: `/api/penhub/litellm`,
+            body: { configPath: input.configPath },
+            successStatus: 200,
+            declaredStatuses: [503, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      stop: (requestOptions?: RequestOptions) =>
+        request<ServerPenhubStopOutput>(
+          {
+            method: "POST",
+            path: `/api/penhub/litellm/stop`,
+            successStatus: 200,
+            declaredStatuses: [503, 401, 400],
+            empty: false,
+          },
           requestOptions,
         ),
     },

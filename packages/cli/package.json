@@ -1,11 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/cli",
+  "name": "@penhub-ai/cli",
   "version": "1.17.11",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "lildax": "./bin/lildax.cjs"
+    "penhub": "./bin/lildax.cjs"
   },
   "files": [
     "bin"

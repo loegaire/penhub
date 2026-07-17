@@ -1,5 +1,6 @@
 import { sentryVitePlugin } from "@sentry/vite-plugin"
 import { defineConfig } from "vite"
+import path from "node:path"
 import desktopPlugin from "./vite"
 
 const sentry =
@@ -29,5 +30,11 @@ export default defineConfig({
   build: {
     target: "esnext",
     sourcemap: true,
+    rollupOptions: {
+      input: {
+        app: path.resolve(import.meta.dirname, "index.html"),
+        penhub: path.resolve(import.meta.dirname, "penhub.html"),
+      },
+    },
   },
 })

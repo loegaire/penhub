@@ -66,6 +66,14 @@ export type UnknownError = {
 export const isUnknownError = (value: unknown): value is UnknownError =>
   typeof value === "object" && value !== null && "_tag" in value && value._tag === "UnknownError"
 
+export type ProviderNotFoundError = {
+  readonly _tag: "ProviderNotFoundError"
+  readonly providerID: string
+  readonly message: string
+}
+export const isProviderNotFoundError = (value: unknown): value is ProviderNotFoundError =>
+  typeof value === "object" && value !== null && "_tag" in value && value._tag === "ProviderNotFoundError"
+
 export type SessionsListInput = {
   readonly workspace?: {
     readonly workspace?: string | undefined
@@ -1672,3 +1680,628 @@ export type SessionsMessageOutput = {
 }["data"]
 
 export type EventsSubscribeOutput = OpenCodeEventEncoded
+
+export type ServerModelListInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerModelListOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly id: string
+    readonly providerID: string
+    readonly family?: string
+    readonly name: string
+    readonly api:
+      | {
+          readonly id: string
+          readonly type: "aisdk"
+          readonly package: string
+          readonly url?: string
+          readonly settings?: { readonly [x: string]: JsonValue }
+        }
+      | {
+          readonly id: string
+          readonly type: "native"
+          readonly url?: string
+          readonly settings: { readonly [x: string]: JsonValue }
+        }
+    readonly capabilities: {
+      readonly tools: boolean
+      readonly input: ReadonlyArray<string>
+      readonly output: ReadonlyArray<string>
+    }
+    readonly request: {
+      readonly headers: { readonly [x: string]: string }
+      readonly body: { readonly [x: string]: JsonValue }
+      readonly variant?: string
+    }
+    readonly variants: ReadonlyArray<{
+      readonly id: string
+      readonly headers: { readonly [x: string]: string }
+      readonly body: { readonly [x: string]: JsonValue }
+    }>
+    readonly time: { readonly released: number }
+    readonly cost: ReadonlyArray<{
+      readonly tier?: { readonly type: "context"; readonly size: number }
+      readonly input: number
+      readonly output: number
+      readonly cache: { readonly read: number; readonly write: number }
+    }>
+    readonly status: "alpha" | "beta" | "deprecated" | "active"
+    readonly enabled: boolean
+    readonly limit: { readonly context: number; readonly input?: number; readonly output: number }
+  }>
+}
+
+export type ServerProviderListInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerProviderListOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly id: string
+    readonly integrationID?: string
+    readonly name: string
+    readonly disabled?: boolean
+    readonly api:
+      | {
+          readonly type: "aisdk"
+          readonly package: string
+          readonly url?: string
+          readonly settings?: { readonly [x: string]: JsonValue }
+        }
+      | { readonly type: "native"; readonly url?: string; readonly settings: { readonly [x: string]: JsonValue } }
+    readonly request: {
+      readonly headers: { readonly [x: string]: string }
+      readonly body: { readonly [x: string]: JsonValue }
+    }
+  }>
+}
+
+export type ServerProviderGetInput = {
+  readonly providerID: { readonly providerID: string }["providerID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerProviderGetOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly id: string
+    readonly integrationID?: string
+    readonly name: string
+    readonly disabled?: boolean
+    readonly api:
+      | {
+          readonly type: "aisdk"
+          readonly package: string
+          readonly url?: string
+          readonly settings?: { readonly [x: string]: JsonValue }
+        }
+      | { readonly type: "native"; readonly url?: string; readonly settings: { readonly [x: string]: JsonValue } }
+    readonly request: {
+      readonly headers: { readonly [x: string]: string }
+      readonly body: { readonly [x: string]: JsonValue }
+    }
+  }
+}
+
+export type ServerIntegrationListInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerIntegrationListOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly id: string
+    readonly name: string
+    readonly methods: ReadonlyArray<
+      | {
+          readonly id: string
+          readonly type: "oauth"
+          readonly label: string
+          readonly prompts?: ReadonlyArray<
+            | {
+                readonly type: "text"
+                readonly key: string
+                readonly message: string
+                readonly placeholder?: string
+                readonly when?: { readonly key: string; readonly op: "eq" | "neq"; readonly value: string }
+              }
+            | {
+                readonly type: "select"
+                readonly key: string
+                readonly message: string
+                readonly options: ReadonlyArray<{
+                  readonly label: string
+                  readonly value: string
+                  readonly hint?: string
+                }>
+                readonly when?: { readonly key: string; readonly op: "eq" | "neq"; readonly value: string }
+              }
+          >
+        }
+      | { readonly type: "key"; readonly label?: string }
+      | { readonly type: "env"; readonly names: ReadonlyArray<string> }
+    >
+    readonly connections: ReadonlyArray<
+      | { readonly type: "credential"; readonly id: string; readonly label: string }
+      | { readonly type: "env"; readonly name: string }
+    >
+  }>
+}
+
+export type ServerIntegrationGetInput = {
+  readonly integrationID: { readonly integrationID: string }["integrationID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerIntegrationGetOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly id: string
+    readonly name: string
+    readonly methods: ReadonlyArray<
+      | {
+          readonly id: string
+          readonly type: "oauth"
+          readonly label: string
+          readonly prompts?: ReadonlyArray<
+            | {
+                readonly type: "text"
+                readonly key: string
+                readonly message: string
+                readonly placeholder?: string
+                readonly when?: { readonly key: string; readonly op: "eq" | "neq"; readonly value: string }
+              }
+            | {
+                readonly type: "select"
+                readonly key: string
+                readonly message: string
+                readonly options: ReadonlyArray<{
+                  readonly label: string
+                  readonly value: string
+                  readonly hint?: string
+                }>
+                readonly when?: { readonly key: string; readonly op: "eq" | "neq"; readonly value: string }
+              }
+          >
+        }
+      | { readonly type: "key"; readonly label?: string }
+      | { readonly type: "env"; readonly names: ReadonlyArray<string> }
+    >
+    readonly connections: ReadonlyArray<
+      | { readonly type: "credential"; readonly id: string; readonly label: string }
+      | { readonly type: "env"; readonly name: string }
+    >
+  } | null
+}
+
+export type ServerIntegrationKeyInput = {
+  readonly integrationID: { readonly integrationID: string }["integrationID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly key: { readonly key: string; readonly label?: string | undefined }["key"]
+  readonly label?: { readonly key: string; readonly label?: string | undefined }["label"]
+}
+
+export type ServerIntegrationKeyOutput = void
+
+export type ServerIntegrationOauthInput = {
+  readonly integrationID: { readonly integrationID: string }["integrationID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly methodID: {
+    readonly methodID: string
+    readonly inputs: { readonly [x: string]: string }
+    readonly label?: string | undefined
+  }["methodID"]
+  readonly inputs: {
+    readonly methodID: string
+    readonly inputs: { readonly [x: string]: string }
+    readonly label?: string | undefined
+  }["inputs"]
+  readonly label?: {
+    readonly methodID: string
+    readonly inputs: { readonly [x: string]: string }
+    readonly label?: string | undefined
+  }["label"]
+}
+
+export type ServerIntegrationOauthOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly attemptID: string
+    readonly url: string
+    readonly instructions: string
+    readonly mode: "auto" | "code"
+    readonly time: {
+      readonly created: number | "Infinity" | "-Infinity" | "NaN"
+      readonly expires: number | "Infinity" | "-Infinity" | "NaN"
+    }
+  }
+}
+
+export type ServerIntegrationStatusInput = {
+  readonly attemptID: { readonly attemptID: string }["attemptID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerIntegrationStatusOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data:
+    | {
+        readonly status: "pending"
+        readonly time: {
+          readonly created: number | "Infinity" | "-Infinity" | "NaN"
+          readonly expires: number | "Infinity" | "-Infinity" | "NaN"
+        }
+      }
+    | {
+        readonly status: "complete"
+        readonly time: {
+          readonly created: number | "Infinity" | "-Infinity" | "NaN"
+          readonly expires: number | "Infinity" | "-Infinity" | "NaN"
+        }
+      }
+    | {
+        readonly status: "failed"
+        readonly message: string
+        readonly time: {
+          readonly created: number | "Infinity" | "-Infinity" | "NaN"
+          readonly expires: number | "Infinity" | "-Infinity" | "NaN"
+        }
+      }
+    | {
+        readonly status: "expired"
+        readonly time: {
+          readonly created: number | "Infinity" | "-Infinity" | "NaN"
+          readonly expires: number | "Infinity" | "-Infinity" | "NaN"
+        }
+      }
+}
+
+export type ServerIntegrationCompleteInput = {
+  readonly attemptID: { readonly attemptID: string }["attemptID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly code?: { readonly code?: string | undefined }["code"]
+}
+
+export type ServerIntegrationCompleteOutput = void
+
+export type ServerIntegrationCancelInput = {
+  readonly attemptID: { readonly attemptID: string }["attemptID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerIntegrationCancelOutput = void
+
+export type ServerCredentialUpdateInput = {
+  readonly credentialID: { readonly credentialID: string }["credentialID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly label: { readonly label: string }["label"]
+}
+
+export type ServerCredentialUpdateOutput = void
+
+export type ServerCredentialRemoveInput = {
+  readonly credentialID: { readonly credentialID: string }["credentialID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerCredentialRemoveOutput = void
+
+export type ServerCommandListInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerCommandListOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly name: string
+    readonly template: string
+    readonly description?: string
+    readonly agent?: string
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+    readonly subtask?: boolean
+  }>
+}
+
+export type ServerSkillListInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerSkillListOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly name: string
+    readonly description?: string
+    readonly slash?: boolean
+    readonly location: string
+    readonly content: string
+  }>
+}
+
+export type ServerLocationGetInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerLocationGetOutput = {
+  readonly directory: string
+  readonly workspaceID?: string
+  readonly project: { readonly id: string; readonly directory: string }
+}
+
+export type ServerReferenceListInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerReferenceListOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly name: string
+    readonly path: string
+    readonly description?: string
+    readonly hidden?: boolean
+    readonly source:
+      | { readonly type: "local"; readonly path: string; readonly description?: string; readonly hidden?: boolean }
+      | {
+          readonly type: "git"
+          readonly repository: string
+          readonly branch?: string
+          readonly description?: string
+          readonly hidden?: boolean
+        }
+  }>
+}
+
+export type ServerPenhubListInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerPenhubListOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly id: "web" | "browser" | "audit" | "binary" | "forensics" | "crypto"
+    readonly description: string
+    readonly image: string
+    readonly digest?: string
+    readonly platforms: ReadonlyArray<"linux/amd64" | "linux/arm64">
+    readonly installed: boolean
+    readonly tools: ReadonlyArray<{ readonly name: string; readonly command: string; readonly description: string }>
+  }>
+}
+
+export type ServerPenhubGetInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerPenhubGetOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly initialized: boolean
+    readonly workspace?: {
+      readonly challenge: {
+        readonly id: string
+        readonly name: string
+        readonly type: "web" | "crypto" | "pwn" | "rev" | "misc" | "cloud" | "unknown"
+        readonly goal: string
+        readonly workspacePath: string
+        readonly createdAt: string
+      }
+      readonly facts: ReadonlyArray<{
+        readonly id: string
+        readonly source: "source" | "runtime" | "tool" | "model" | "manual"
+        readonly claim: string
+        readonly confidence: number | "Infinity" | "-Infinity" | "NaN"
+        readonly evidenceIds: ReadonlyArray<string>
+        readonly branchId?: string
+        readonly hypothesisId?: string
+        readonly createdAt: string
+      }>
+      readonly hypotheses: ReadonlyArray<{
+        readonly id: string
+        readonly claim: string
+        readonly status: "open" | "testing" | "confirmed" | "failed" | "stale"
+        readonly requiredEvidence: ReadonlyArray<string>
+        readonly nextTest?: string
+        readonly confidence: number | "Infinity" | "-Infinity" | "NaN"
+        readonly branchId?: string
+        readonly createdAt: string
+        readonly updatedAt: string
+      }>
+      readonly branches: ReadonlyArray<{
+        readonly id: string
+        readonly goal: string
+        readonly status: "open" | "active" | "blocked" | "confirmed" | "failed" | "stale"
+        readonly confidence: number | "Infinity" | "-Infinity" | "NaN"
+        readonly progress: number | "Infinity" | "-Infinity" | "NaN"
+        readonly novelty: number | "Infinity" | "-Infinity" | "NaN"
+        readonly tokenCost: number | "Infinity" | "-Infinity" | "NaN"
+        readonly repetitionPenalty: number | "Infinity" | "-Infinity" | "NaN"
+        readonly evidenceIds: ReadonlyArray<string>
+        readonly hypothesisIds: ReadonlyArray<string>
+        readonly createdAt: string
+        readonly updatedAt: string
+      }>
+      readonly evidence: ReadonlyArray<{
+        readonly id: string
+        readonly type: "file" | "http" | "log" | "runtime" | "diff" | "flag" | "manual"
+        readonly summary: string
+        readonly artifactPath?: string
+        readonly hash?: string
+        readonly supports: ReadonlyArray<string>
+        readonly branchId?: string
+        readonly hypothesisId?: string
+        readonly createdAt: string
+      }>
+      readonly failedAttempts: ReadonlyArray<{
+        readonly id: string
+        readonly summary: string
+        readonly reason: string
+        readonly branchId?: string
+        readonly hypothesisId?: string
+        readonly actionId?: string
+        readonly createdAt: string
+      }>
+      readonly tokenUsage: {
+        readonly totalInputTokens: number | "Infinity" | "-Infinity" | "NaN"
+        readonly totalOutputTokens: number | "Infinity" | "-Infinity" | "NaN"
+        readonly totalTokens: number | "Infinity" | "-Infinity" | "NaN"
+        readonly byBranch: { readonly [x: string]: number | "Infinity" | "-Infinity" | "NaN" }
+        readonly byAction: { readonly [x: string]: number | "Infinity" | "-Infinity" | "NaN" }
+        readonly byHypothesis: { readonly [x: string]: number | "Infinity" | "-Infinity" | "NaN" }
+        readonly compressionRatio?: number | "Infinity" | "-Infinity" | "NaN"
+      }
+    }
+    readonly reportMarkdown?: string
+  }
+}
+
+export type ServerPenhubGenerateInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerPenhubGenerateOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: { readonly path: string; readonly markdown: string }
+}
+
+export type ServerPenhubPullInput = {
+  readonly pack: { readonly pack: "web" | "browser" | "audit" | "binary" | "forensics" | "crypto" }["pack"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerPenhubPullOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly pack: "web" | "browser" | "audit" | "binary" | "forensics" | "crypto"
+    readonly runtime: "docker" | "podman"
+    readonly image: string
+    readonly output: string
+  }
+}
+
+export type ServerPenhubStatusOutput = {
+  readonly state: "stopped" | "starting" | "ready" | "error"
+  readonly baseURL: string
+  readonly configPath?: string
+  readonly executable?: string
+  readonly pid?: number | "Infinity" | "-Infinity" | "NaN"
+  readonly message?: string
+}
+
+export type ServerPenhubStartInput = { readonly configPath: { readonly configPath: string }["configPath"] }
+
+export type ServerPenhubStartOutput = {
+  readonly state: "stopped" | "starting" | "ready" | "error"
+  readonly baseURL: string
+  readonly configPath?: string
+  readonly executable?: string
+  readonly pid?: number | "Infinity" | "-Infinity" | "NaN"
+  readonly message?: string
+}
+
+export type ServerPenhubStopOutput = {
+  readonly state: "stopped" | "starting" | "ready" | "error"
+  readonly baseURL: string
+  readonly configPath?: string
+  readonly executable?: string
+  readonly pid?: number | "Infinity" | "-Infinity" | "NaN"
+  readonly message?: string
+}

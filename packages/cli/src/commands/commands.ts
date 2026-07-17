@@ -3,8 +3,8 @@ import { Spec } from "../framework/spec"
 
 declare const OPENCODE_CLI_NAME: string | undefined
 
-export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "opencode", {
-  description: "OpenCode 2.0 preview command line interface",
+export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "penhub", {
+  description: "PenHub security agent",
   commands: [
     Spec.make("api", {
       description: "Make a request to the running server",
@@ -22,11 +22,6 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
         param: Flag.keyValuePair("param").pipe(Flag.withDescription("OpenAPI path or query parameter"), Flag.optional),
       },
     }),
-    Spec.make("debug", {
-      description: "Debugging and troubleshooting tools",
-      commands: [Spec.make("agents", { description: "List all agents" })],
-    }),
-    Spec.make("migrate", { description: "Migrate v1 data to v2" }),
     Spec.make("service", {
       description: "Manage the background server",
       commands: [
@@ -47,6 +42,18 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
         port: Flag.integer("port").pipe(Flag.optional),
         register: Flag.boolean("register").pipe(Flag.withDefault(false)),
       },
+    }),
+    Spec.make("tools", {
+      description: "Manage packaged OCI security tools",
+      commands: [
+        Spec.make("list", { description: "List tool packs and local image status" }),
+        Spec.make("pull", {
+          description: "Pull one tool pack",
+          params: { pack: Argument.string("pack") },
+        }),
+        Spec.make("preload", { description: "Pull every tool pack" }),
+        Spec.make("verify", { description: "Verify that every tool pack is locally available" }),
+      ],
     }),
   ],
 })

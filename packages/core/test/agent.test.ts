@@ -98,7 +98,7 @@ describe("AgentV2", () => {
     }),
   )
 
-  it.effect("does not ambiently opt built-in agents into bash", () =>
+  it.effect("registers security agents with pack-scoped tool visibility", () =>
     Effect.gen(function* () {
       const agent = yield* AgentV2.Service
       yield* AgentPlugin.Plugin.effect(
@@ -114,17 +114,30 @@ describe("AgentV2", () => {
 
       const agents = yield* agent.all()
       expect(agents.map((item) => String(item.id)).sort()).toEqual([
-        "build",
+        "binary",
         "compaction",
-        "explore",
-        "general",
-        "plan",
+        "crypto",
+        "forensics",
+        "operator",
+        "recon",
+        "source-audit",
         "summary",
         "title",
       ])
-      for (const item of agents) {
-        expect(item.permissions.some((rule) => rule.action === "bash" && rule.effect !== "deny")).toBe(false)
-      }
+      const operator = yield* agent.get(AgentV2.ID.make("operator"))
+      const binary = yield* agent.get(AgentV2.ID.make("binary"))
+      const sourceAudit = yield* agent.get(AgentV2.ID.make("source-audit"))
+      const forensics = yield* agent.get(AgentV2.ID.make("forensics"))
+      expect(operator?.request.body.toolChoice).toBe("required")
+      expect(binary?.request.body.toolChoice).toBe("required")
+      expect(operator?.permissions.findLast((rule) => rule.action === "sec_httpx")?.effect).toBe("allow")
+      expect(operator?.permissions.findLast((rule) => rule.action === "sec_sqlmap")?.effect).toBe("allow")
+      expect(operator?.permissions.findLast((rule) => rule.action === "sec_gdb")).toBeUndefined()
+      expect(binary?.permissions.findLast((rule) => rule.action === "sec_gdb")?.effect).toBe("allow")
+      expect(binary?.permissions.findLast((rule) => rule.action === "sec_checksec")?.effect).toBe("allow")
+      expect(binary?.permissions.findLast((rule) => rule.action === "sec_httpx")).toBeUndefined()
+      expect(sourceAudit?.permissions.findLast((rule) => rule.action === "sec_bandit")?.effect).toBe("allow")
+      expect(forensics?.permissions.findLast((rule) => rule.action === "sec_fls")?.effect).toBe("allow")
     }),
   )
 })

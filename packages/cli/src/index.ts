@@ -10,10 +10,6 @@ import { Daemon } from "./services/daemon"
 const Handlers = Runtime.handlers(Commands, {
   $: () => import("./commands/handlers/default"),
   api: () => import("./commands/handlers/api"),
-  debug: {
-    agents: () => import("./commands/handlers/debug/agents"),
-  },
-  migrate: () => import("./commands/handlers/migrate"),
   service: {
     start: () => import("./commands/handlers/service/start"),
     restart: () => import("./commands/handlers/service/restart"),
@@ -22,6 +18,12 @@ const Handlers = Runtime.handlers(Commands, {
     password: () => import("./commands/handlers/service/password"),
   },
   serve: () => import("./commands/handlers/serve"),
+  tools: {
+    list: () => import("./commands/handlers/tools/list"),
+    pull: () => import("./commands/handlers/tools/pull"),
+    preload: () => import("./commands/handlers/tools/preload"),
+    verify: () => import("./commands/handlers/tools/verify"),
+  },
 })
 
 Runtime.run(Commands, Handlers, { version: "local" }).pipe(

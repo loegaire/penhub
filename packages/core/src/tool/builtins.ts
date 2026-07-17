@@ -11,7 +11,8 @@ import { QuestionTool } from "./question"
 import { ReadTool } from "./read"
 import { ReadToolFileSystem } from "./read-filesystem"
 import { SkillTool } from "./skill"
-import { TodoWriteTool } from "./todowrite"
+import { SecurityTools } from "./security"
+import { PenHubStateTools } from "./penhub-state"
 import { WebFetchTool } from "./webfetch"
 import { WebSearchTool } from "./websearch"
 import { WriteTool } from "./write"
@@ -26,7 +27,6 @@ import { Ripgrep } from "../ripgrep"
 import { Image } from "../image"
 import { QuestionV2 } from "../question"
 import { SkillV2 } from "../skill"
-import { SessionTodo } from "../session/todo"
 import { ToolRegistry } from "./registry"
 import { httpClient } from "../effect/layer-node-platform"
 
@@ -52,7 +52,8 @@ export const locationLayer = Layer.mergeAll(
   QuestionTool.layer,
   ReadTool.layer.pipe(Layer.provide(ReadToolFileSystem.layer)),
   SkillTool.layer,
-  TodoWriteTool.layer,
+  SecurityTools.layer,
+  PenHubStateTools.layer,
   WebFetchTool.layer,
   WebSearchTool.layer.pipe(Layer.provide(WebSearchTool.defaultConfigLayer)),
   WriteTool.layer,
@@ -74,7 +75,6 @@ export const node = makeLocationNode({
     Image.node,
     QuestionV2.node,
     SkillV2.node,
-    SessionTodo.node,
     ReadToolFileSystem.node,
     httpClient,
   ],

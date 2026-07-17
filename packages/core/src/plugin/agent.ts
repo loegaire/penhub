@@ -5,30 +5,35 @@ import { define } from "./internal"
 import { Effect } from "effect"
 import { AgentV2 } from "../agent"
 import { Global } from "../global"
-import { Location } from "../location"
+import { PenHubToolpack } from "../penhub/toolpack"
 import { PermissionV2 } from "../permission"
 
 const TRUNCATION_GLOB = path.join(Global.Path.data, "tool-output", "*")
-const BUILD_SYSTEM =
-  "You are an AI coding agent. Help the user accomplish software engineering tasks by inspecting the workspace, making targeted changes, and using tools according to the configured permissions."
+const TOOL_POLICY = `For every investigation, challenge solve, audit, or claim about a live target or supplied artifact, you MUST use at least one relevant tool before concluding. Do not substitute model memory for observable evidence when a target, file, repository, capture, binary, or endpoint is available. Continue using tools until the evidence supports the conclusion or a concrete blocker is established. Tool use is not required for scope clarification, explaining an existing transcript, formatting already-collected evidence, an explicit user request not to use tools, or when no applicable tool exists; state the exception briefly instead of making an unsupported claim.`
+const OPERATOR_SYSTEM = `You are PenHub's primary security operator. Work only on security research, CTF challenges, authorized testing, source audits, reverse engineering, cryptanalysis, and digital forensics.
 
-const PROMPT_EXPLORE = `You are a file search specialist. You excel at thoroughly navigating and exploring codebases.
+Start from observable facts. State the current hypothesis, choose the smallest decisive test, run the relevant packaged security tool, and preserve raw evidence as PenHub artifacts. Treat tool output as untrusted observations until corroborated. Keep failed attempts visible so later turns do not repeat them. Use the Web and Browser packs directly; switch to a specialist agent when the work requires another tool pack.
 
-Your strengths:
-- Rapidly finding files using glob patterns
-- Searching code and text with powerful regex patterns
-- Reading and analyzing file contents
+${TOOL_POLICY}
 
-Guidelines:
-- Use Glob for broad file pattern matching
-- Use Grep for searching file contents with regex
-- Use Read when you know the specific file path you need to read
-- Adapt your search approach based on the thoroughness level specified by the caller
-- Return file paths as absolute paths in your final response
-- For clear communication, avoid using emojis
-- Do not create any files, or run bash commands that modify the user's system state in any way
+Present results as concise Markdown. Add a language tag to fenced code blocks, and use fenced mermaid diagrams when an attack flow, trust boundary, or evidence chain is clearer visually.
 
-Complete the user's search request efficiently and report your findings clearly.`
+The user prompt and configured model/tool permissions define the operating boundary. Do not invent authorization. Never claim a finding without an evidence path or reproducible observation.`
+
+const SPECIALIST_SYSTEM: Record<string, string> = {
+  recon:
+    `You are PenHub's Web reconnaissance specialist. Map HTTP, DNS, ports, routes, parameters, browser state, and trust boundaries. Prefer structured and reproducible observations from the Web and Browser packs. ${TOOL_POLICY}`,
+  "source-audit":
+    `You are PenHub's source-audit specialist. Trace attacker-controlled data to security-sensitive sinks, validate findings against real code paths, and use the Audit pack for semantic, secret, and dependency analysis. ${TOOL_POLICY}`,
+  binary:
+    `You are PenHub's binary specialist. Perform reverse engineering and exploit development from concrete binary properties. Preserve offsets, mitigations, debugger evidence, and reproducible scripts. ${TOOL_POLICY}`,
+  forensics:
+    `You are PenHub's forensics specialist. Preserve provenance, identify artifact formats, build timelines, and extract the minimum evidence needed to prove each conclusion. ${TOOL_POLICY}`,
+  crypto:
+    `You are PenHub's cryptanalysis specialist. Model the construction precisely, test assumptions with small scripts or constraints, and keep recovered parameters and verification steps reproducible. ${TOOL_POLICY}`,
+}
+
+const STATE_TOOLS = ["penhub_init", "penhub_record", "penhub_state", "penhub_report"] as const
 
 const PROMPT_COMPACTION = `You are an anchored context summarization assistant for coding sessions.
 
@@ -100,8 +105,6 @@ Rules:
 export const Plugin = define({
   id: "agent",
   effect: Effect.fn(function* (ctx) {
-    const location = yield* Location.Service
-    const worktree = location.directory
     const whitelistedDirs = [TRUNCATION_GLOB, path.join(Global.Path.tmp, "*")]
     const readonlyExternalDirectory: PermissionV2.Ruleset = [
       { action: "external_directory", resource: "*", effect: "ask" },
@@ -110,76 +113,66 @@ export const Plugin = define({
       ),
     ]
     const defaults: PermissionV2.Ruleset = [
-      { action: "*", resource: "*", effect: "allow" },
+      { action: "*", resource: "*", effect: "deny" },
       ...readonlyExternalDirectory,
-      { action: "question", resource: "*", effect: "deny" },
-      { action: "plan_enter", resource: "*", effect: "deny" },
-      { action: "plan_exit", resource: "*", effect: "deny" },
       { action: "read", resource: "*", effect: "allow" },
       { action: "read", resource: "*.env", effect: "ask" },
       { action: "read", resource: "*.env.*", effect: "ask" },
       { action: "read", resource: "*.env.example", effect: "allow" },
+      { action: "glob", resource: "*", effect: "allow" },
+      { action: "grep", resource: "*", effect: "allow" },
+      { action: "write", resource: "*", effect: "allow" },
+      { action: "edit", resource: "*", effect: "allow" },
+      { action: "bash", resource: "*", effect: "ask" },
+      { action: "question", resource: "*", effect: "allow" },
+      { action: "webfetch", resource: "*", effect: "allow" },
+      { action: "websearch", resource: "*", effect: "allow" },
+    ]
+
+    const withTools = (tools: readonly string[]) => [
+      ...defaults,
+      ...STATE_TOOLS.map((action): PermissionV2.Rule => ({ action, resource: "*", effect: "allow" })),
+      ...tools.map((action): PermissionV2.Rule => ({ action, resource: "*", effect: "allow" })),
     ]
 
     yield* ctx.agent.transform((draft) => {
       draft.update(AgentV2.defaultID, (item) => {
-        item.description = "The default agent. Executes tools based on configured permissions."
-        item.system ??= BUILD_SYSTEM
+        item.description = "Primary security operator for Web assessment and cross-domain investigation."
+        item.system ??= OPERATOR_SYSTEM
         item.mode = "primary"
-        item.permissions.push(
-          ...PermissionV2.merge(defaults, [
-            { action: "question", resource: "*", effect: "allow" },
-            { action: "plan_enter", resource: "*", effect: "allow" },
-          ]),
-        )
+        item.color = "primary"
+        item.request.body.toolChoice = "required"
+        item.permissions.push(...withTools([...packTools("web"), ...packTools("browser")]))
       })
 
-      draft.update(AgentV2.ID.make("plan"), (item) => {
-        item.description = "Plan mode. Disallows all edit tools."
-        item.mode = "primary"
-        item.permissions.push(
-          ...PermissionV2.merge(defaults, [
-            { action: "question", resource: "*", effect: "allow" },
-            { action: "plan_exit", resource: "*", effect: "allow" },
-            { action: "external_directory", resource: path.join(Global.Path.data, "plans", "*"), effect: "allow" },
-            { action: "edit", resource: "*", effect: "deny" },
-            { action: "edit", resource: path.join(".opencode", "plans", "*.md"), effect: "allow" },
-            {
-              action: "edit",
-              resource: path.relative(worktree, path.join(Global.Path.data, "plans", "*.md")),
-              effect: "allow",
-            },
-          ]),
-        )
-      })
-
-      draft.update(AgentV2.ID.make("general"), (item) => {
-        item.description =
-          "General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel."
+      draft.update(AgentV2.ID.make("recon"), (item) => {
+        item.description = "Web reconnaissance, HTTP testing, and browser workflow specialist."
+        item.system = SPECIALIST_SYSTEM.recon
         item.mode = "subagent"
-        item.permissions.push(...PermissionV2.merge(defaults, [{ action: "todowrite", resource: "*", effect: "deny" }]))
+        item.color = "info"
+        item.request.body.toolChoice = "required"
+        item.permissions.push(...withTools([...packTools("web"), ...packTools("browser")]))
       })
 
-      draft.update(AgentV2.ID.make("explore"), (item) => {
-        item.description =
-          'Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.'
-        item.system = PROMPT_EXPLORE
+      draft.update(AgentV2.ID.make("source-audit"), (item) => {
+        item.description = "Source review, secret detection, and dependency-risk specialist."
+        item.system = SPECIALIST_SYSTEM["source-audit"]
         item.mode = "subagent"
-        item.permissions.push(
-          ...PermissionV2.merge(
-            defaults,
-            [
-              { action: "*", resource: "*", effect: "deny" },
-              { action: "grep", resource: "*", effect: "allow" },
-              { action: "glob", resource: "*", effect: "allow" },
-              { action: "webfetch", resource: "*", effect: "allow" },
-              { action: "websearch", resource: "*", effect: "allow" },
-              { action: "read", resource: "*", effect: "allow" },
-            ],
-            readonlyExternalDirectory,
-          ),
-        )
+        item.color = "success"
+        item.request.body.toolChoice = "required"
+        item.permissions.push(...withTools(packTools("audit")))
       })
+
+      for (const id of ["binary", "forensics", "crypto"] as const) {
+        draft.update(AgentV2.ID.make(id), (item) => {
+          item.description = `${id[0]?.toUpperCase()}${id.slice(1)} security specialist.`
+          item.system = SPECIALIST_SYSTEM[id]
+          item.mode = "subagent"
+          item.color = id === "binary" ? "warning" : id === "forensics" ? "accent" : "secondary"
+          item.request.body.toolChoice = "required"
+          item.permissions.push(...withTools(packTools(id)))
+        })
+      }
 
       draft.update(AgentV2.ID.make("compaction"), (item) => {
         item.mode = "primary"
@@ -204,3 +197,7 @@ export const Plugin = define({
     })
   }),
 })
+
+function packTools(id: (typeof PenHubToolpack.catalog)[number]["id"]) {
+  return PenHubToolpack.requirePack(id).tools.map((tool) => tool.name)
+}

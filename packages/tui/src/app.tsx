@@ -106,29 +106,19 @@ const appBindingCommands = [
   "model.cycle_favorite",
   "model.cycle_favorite_reverse",
   "agent.list",
-  "mcp.list",
   "agent.cycle",
   "agent.cycle.reverse",
   "variant.cycle",
   "variant.list",
   "provider.connect",
-  "console.org.switch",
-  "opencode.status",
   "theme.switch",
   "theme.switch_mode",
   "theme.mode.lock",
   "help.show",
-  "docs.open",
-  "diff.open",
-  "workspace.list",
-  "app.debug",
-  "app.console",
-  "app.heap_snapshot",
   "terminal.suspend",
   "terminal.title.toggle",
   "app.toggle.animations",
   "app.toggle.file_context",
-  "app.toggle.diffwrap",
   "app.toggle.paste_summary",
   "app.toggle.session_directory_filter",
 ] as const
@@ -888,16 +878,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         category: "System",
         run: () => {
           kv.set("file_context_enabled", !kv.get("file_context_enabled", true))
-          dialog.clear()
-        },
-      },
-      {
-        name: "app.toggle.diffwrap",
-        title: kv.get("diff_wrap_mode", "word") === "word" ? "Disable diff wrapping" : "Enable diff wrapping",
-        category: "System",
-        run: () => {
-          const current = kv.get("diff_wrap_mode", "word")
-          kv.set("diff_wrap_mode", current === "word" ? "none" : "word")
           dialog.clear()
         },
       },

@@ -15,8 +15,12 @@ import { HomeSessionDestinationProvider } from "./home/session-destination"
 
 let once = false
 const placeholder = {
-  normal: ["Fix a TODO in the codebase", "What is the tech stack of this project?", "Fix broken tests"],
-  shell: ["ls -la", "git status", "pwd"],
+  normal: [
+    "Map the attack surface and record initial hypotheses",
+    "Audit this source tree for an exploitable trust-boundary violation",
+    "Inspect the supplied artifact and choose the next decisive test",
+  ],
+  shell: ["penhub tools list", "penhub tools verify", "find .penhub/artifacts -type f"],
 }
 
 export function Home() {
