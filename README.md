@@ -8,8 +8,8 @@ PenHub is an OpenCode-derived security agent for CTF work, authorized security a
 
 PenHub currently runs from a source checkout. A clone provides three main surfaces:
 
-- **TUI:** the quickest way to start PenHub. It launches or reuses a local background API automatically.
-- **Web GUI:** a browser cockpit backed by the same API. The API and frontend run as separate local processes.
+- **TUI mode:** starts the terminal interface and its managed local API with one command.
+- **GUI mode:** starts the API and browser cockpit together in one terminal and stops both together.
 - **CLI/API:** commands for the background service, direct API access, a standalone server, and OCI tool-pack management.
 
 The runtime can use six OCI security tool packs containing 54 tools:
@@ -56,12 +56,12 @@ bun install
 
 `bun install` installs all workspace dependencies and runs the repository's post-install setup for the terminal runtime.
 
-## Quick Start: Terminal UI
+## Quick Start: TUI Mode
 
 From the repository root:
 
 ```bash
-bun run dev
+bun run tui
 ```
 
 This starts the PenHub TUI. It also starts a password-protected local background API when one is not already running. The generated password and server registration stay in the local application state directory; they do not need to be entered manually by the TUI.
@@ -72,6 +72,8 @@ On first launch:
 2. Select a provider and complete its API-key or authorization flow.
 3. Enter `/models` to select the model used for new sessions.
 4. Open a workspace and start a session.
+
+`bun run dev` remains an alias for `bun run tui`.
 
 Useful service commands:
 
@@ -87,45 +89,48 @@ bun run packages/cli/src/index.ts service restart
 bun run packages/cli/src/index.ts service stop
 ```
 
-## Quick Start: Web GUI
+## Quick Start: GUI Mode
 
-The development Web GUI needs an API server and the Vite frontend. Run them in separate terminals.
-
-### Terminal 1: start the local API
+From the repository root:
 
 ```bash
-cd penhub
-OPENCODE_SERVER_PASSWORD= bun run packages/cli/src/index.ts serve --port 4096
+bun run gui
 ```
 
-The empty password is intentional for this loopback-only development setup. The server binds to `127.0.0.1` by default, so it is not exposed to the network.
+This supervises both processes in one terminal:
 
-Expected output:
+- the PenHub API at `http://127.0.0.1:4096`
+- the Web GUI at `http://127.0.0.1:3000/penhub.html`
+
+If either port is already in use, GUI mode automatically selects the next available port and prints the actual URL.
+
+Open the printed GUI URL:
 
 ```text
-server listening on http://127.0.0.1:4096
+http://127.0.0.1:3000/penhub.html
 ```
 
-### Terminal 2: start the frontend
+Press `Ctrl+C` once to stop both processes. `bun run dev:gui` remains an alias for `bun run gui`.
+
+GUI mode disables filesystem snapshots by default so large CTF workspaces do not block every model turn while Git scans the entire tree. To retain snapshot-backed undo and revert behavior, start it with `OPENCODE_DISABLE_SNAPSHOTS=0 bun run gui`.
+
+If `~/ctf/litellm_config.yaml` exists, GUI mode also starts the local LiteLLM proxy and prefers `litellm-proxy/gpt-4o` for new sessions. Set `PENHUB_LITELLM_CONFIG=/absolute/path/config.yaml` to use another configuration. The proxy stops with the GUI.
+
+Automatic local-model startup requires the `litellm` executable on `PATH`; installing `litellm[proxy]` with pipx keeps it isolated from system Python packages.
+
+To use different ports:
 
 ```bash
-cd penhub
-bun run dev:gui
+bun run packages/cli/src/index.ts gui --api-port 4097 --gui-port 3001
 ```
 
-Open:
+The combined mode injects its supervised API address into the frontend, so stale `server` query parameters cannot redirect it to another local daemon. You can still select a workspace from the browser:
 
 ```text
-http://localhost:3000/penhub.html
+http://127.0.0.1:3001/penhub.html?workspace=/absolute/path/to/workspace
 ```
 
-The browser cockpit defaults to `http://localhost:4096`. To select another API or workspace, use query parameters:
-
-```text
-http://localhost:3000/penhub.html?server=http://localhost:4097&workspace=/absolute/path/to/workspace
-```
-
-URL-encode the workspace value when it contains spaces or special characters.
+URL-encode the workspace value when it contains spaces or special characters. A separately started frontend still accepts the `server` query parameter when no GUI-mode API address was injected.
 
 ### Connect a provider in the Web GUI
 
@@ -221,8 +226,10 @@ Common commands:
 
 | Command                                               | Purpose                                                              |
 | ----------------------------------------------------- | -------------------------------------------------------------------- |
-| `bun run dev`                                         | Start the TUI and its local background API                           |
-| `bun run dev:gui`                                     | Start the Web GUI development server on port 3000                    |
+| `bun run tui`                                         | Start TUI mode and its managed local API                             |
+| `bun run gui`                                         | Start and supervise the API and Web GUI in one terminal              |
+| `bun run dev`                                         | Alias for `bun run tui`                                              |
+| `bun run dev:gui`                                     | Alias for `bun run gui`                                              |
 | `bun run packages/cli/src/index.ts serve`             | Start a standalone API, selecting the first available port from 4096 |
 | `bun run packages/cli/src/index.ts serve --port 4096` | Start a standalone API on a fixed port                               |
 | `bun run packages/cli/src/index.ts service status`    | Inspect the managed background API                                   |
@@ -246,7 +253,7 @@ The output is written to `packages/app/dist/`. Preview it locally with:
 bun run serve
 ```
 
-The built frontend still needs a running PenHub API. Open `penhub.html` and pass the API with the `server` query parameter when it is not using port 4096.
+The built frontend still needs a running PenHub API. Normal source usage should use `bun run gui`, which starts both. Open `penhub.html` and pass the API with the `server` query parameter when previewing production assets independently.
 
 ### Native CLI for the current platform
 
@@ -312,25 +319,25 @@ bun typecheck
 
 ### The browser says the API is unavailable
 
-Confirm the standalone server is still running and that its printed port matches the `server` query parameter. The default browser URL expects port 4096.
+Run the combined mode and confirm that neither child process reports a startup error:
 
 ```bash
-OPENCODE_SERVER_PASSWORD= bun run packages/cli/src/index.ts serve --port 4096
+bun run gui
 ```
 
 ### Port 4096 is already in use
 
-Start on another port and point the GUI to it:
+`bun run gui` automatically advances to the next available API port. To choose a different starting port explicitly:
 
 ```bash
-OPENCODE_SERVER_PASSWORD= bun run packages/cli/src/index.ts serve --port 4097
+bun run packages/cli/src/index.ts gui --api-port 4097 --gui-port 3001
 ```
 
 ```text
-http://localhost:3000/penhub.html?server=http://localhost:4097
+http://127.0.0.1:3001/penhub.html
 ```
 
-Alternatively, omit `--port`; the server searches from 4096 upward and prints the selected address.
+The advanced standalone `serve` command can still search from port 4096 upward when `--port` is omitted.
 
 ### No models are available
 

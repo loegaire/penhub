@@ -6,6 +6,15 @@ declare const OPENCODE_CLI_NAME: string | undefined
 export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "penhub", {
   description: "PenHub security agent",
   commands: [
+    Spec.make("tui", { description: "Start PenHub in terminal mode" }),
+    Spec.make("gui", {
+      description: "Start the PenHub API and Web GUI together",
+      params: {
+        hostname: Flag.string("hostname").pipe(Flag.withDefault("127.0.0.1")),
+        apiPort: Flag.integer("api-port").pipe(Flag.withDefault(4096)),
+        guiPort: Flag.integer("gui-port").pipe(Flag.withDefault(3000)),
+      },
+    }),
     Spec.make("api", {
       description: "Make a request to the running server",
       params: {

@@ -9,6 +9,8 @@ import { Daemon } from "./services/daemon"
 
 const Handlers = Runtime.handlers(Commands, {
   $: () => import("./commands/handlers/default"),
+  tui: () => import("./commands/handlers/default"),
+  gui: () => import("./commands/handlers/gui"),
   api: () => import("./commands/handlers/api"),
   service: {
     start: () => import("./commands/handlers/service/start"),

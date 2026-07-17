@@ -6,8 +6,10 @@
   "type": "module",
   "packageManager": "bun@1.3.14",
   "scripts": {
-    "dev": "bun run --cwd packages/cli dev",
-    "dev:gui": "bun --cwd packages/app dev",
+    "dev": "bun run tui",
+    "dev:gui": "bun run gui",
+    "tui": "bun run --cwd packages/cli dev tui",
+    "gui": "bun run --cwd packages/cli dev gui",
     "lint": "oxlint",
     "typecheck": "bun turbo typecheck",
     "postinstall": "bun run --cwd packages/core fix-node-pty",

@@ -6,6 +6,7 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { Config } from "./config"
 import { File } from "./file"
 import { FSUtil } from "./fs-util"
+import { Flag } from "./flag/flag"
 import { Git } from "./git"
 import { Global } from "./global"
 import { Location } from "./location"
@@ -122,6 +123,7 @@ export const layer = Layer.effect(
     })
 
     const enabled = Effect.fnUntraced(function* () {
+      if (Flag.OPENCODE_DISABLE_SNAPSHOTS) return false
       if (location.vcs?.type !== "git") return false
       return Config.latest(yield* config.entries(), "snapshots") !== false
     })

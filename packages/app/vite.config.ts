@@ -1,5 +1,5 @@
 import { sentryVitePlugin } from "@sentry/vite-plugin"
-import { defineConfig } from "vite"
+import { defineConfig, type Plugin } from "vite"
 import path from "node:path"
 import desktopPlugin from "./vite"
 
@@ -20,8 +20,27 @@ const sentry =
       })
     : false
 
+const penhub =
+  process.env.PENHUB_GUI === "1"
+    ? ({
+        name: "penhub-root",
+        configureServer(server) {
+          server.middlewares.use((request, response, next) => {
+            const url = new URL(request.url ?? "/", "http://localhost")
+            if (url.pathname !== "/") {
+              next()
+              return
+            }
+            response.statusCode = 302
+            response.setHeader("location", `/penhub.html${url.search}`)
+            response.end()
+          })
+        },
+      } satisfies Plugin)
+    : false
+
 export default defineConfig({
-  plugins: [desktopPlugin, sentry] as any,
+  plugins: [desktopPlugin, penhub, sentry] as any,
   server: {
     host: "0.0.0.0",
     allowedHosts: true,

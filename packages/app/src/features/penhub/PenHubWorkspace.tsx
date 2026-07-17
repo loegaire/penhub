@@ -104,7 +104,7 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
   const [mobilePanel, setMobilePanel] = createSignal<"sessions" | "context">()
   const [runtimePanel, setRuntimePanel] = createSignal<"agent" | "model" | "provider">()
   const [theme, setTheme] = createSignal<"light" | "dark">("dark")
-  const [fontSize, setFontSize] = createSignal(15)
+  const [fontSize, setFontSize] = createSignal(12)
   const [alwaysApprove, setAlwaysApprove] = createSignal(false)
   const [prompt, setPrompt] = createSignal("")
   const [attachments, setAttachments] = createSignal<readonly PromptAttachment[]>([])
@@ -114,7 +114,7 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
   const [draftModel, setDraftModel] = createSignal("")
   const [liteLLMDialog, setLiteLLMDialog] = createSignal(false)
   const [liteLLMConfig, setLiteLLMConfig] = createSignal("~/ctf/litellm_config.yaml")
-  const [pendingModel, setPendingModel] = createSignal("custom-litellm/gpt-4o")
+  const [pendingModel, setPendingModel] = createSignal("litellm-proxy/gpt-4o")
   const [integrationID, setIntegrationID] = createSignal("")
   const [apiKey, setApiKey] = createSignal("")
   const currentDirectory = createMemo(() => workspaceDirectory() || view()?.state.location.directory || "")
@@ -154,19 +154,22 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
     if (!id) return
     return { connection: connection(), id }
   })
-  const [pending, { mutate: mutatePending, refetch: refetchPending }] = createResource(pendingSource, async (source) => {
-    const [permissions, questions] = await Promise.all([
-      apiRequest<DataResponse<readonly PermissionRequest[]>>(
-        source.connection,
-        `/api/session/${encodeURIComponent(source.id)}/permission`,
-      ),
-      apiRequest<DataResponse<readonly QuestionRequest[]>>(
-        source.connection,
-        `/api/session/${encodeURIComponent(source.id)}/question`,
-      ),
-    ])
-    return { permissions: permissions.data, questions: questions.data }
-  })
+  const [pending, { mutate: mutatePending, refetch: refetchPending }] = createResource(
+    pendingSource,
+    async (source) => {
+      const [permissions, questions] = await Promise.all([
+        apiRequest<DataResponse<readonly PermissionRequest[]>>(
+          source.connection,
+          `/api/session/${encodeURIComponent(source.id)}/permission`,
+        ),
+        apiRequest<DataResponse<readonly QuestionRequest[]>>(
+          source.connection,
+          `/api/session/${encodeURIComponent(source.id)}/question`,
+        ),
+      ])
+      return { permissions: permissions.data, questions: questions.data }
+    },
+  )
   const [liteLLM, { refetch: refetchLiteLLM }] = createResource(client, (value) => value["server.penhub"].status())
   const fileSource = createMemo(() => {
     const directory = view()?.state.location.directory
@@ -215,7 +218,11 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
 
   createEffect(() => {
     if (draftModel()) return
+    if (liteLLM.loading) return
     const preferred =
+      (liteLLM()?.state === "ready"
+        ? availableModels().find((item) => item.providerID === "litellm-proxy" && item.id === "gpt-4o")
+        : undefined) ??
       availableModels().find((item) => item.providerID === "opencode" && item.id === "hy3-free") ??
       availableModels().find((item) => item.providerID === "opencode") ??
       availableModels()[0]
@@ -380,11 +387,10 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
       const data = event.data
       streamDeltas.delete(streamPartKey(data.assistantMessageID, data.reasoningID))
       const assistant = messages()?.find(
-        (message): message is AssistantMessageInfo => message.id === data.assistantMessageID && message.type === "assistant",
+        (message): message is AssistantMessageInfo =>
+          message.id === data.assistantMessageID && message.type === "assistant",
       )
-      const existing = assistant?.content.find(
-        (part) => part.id === data.reasoningID && part.type === "reasoning",
-      )
+      const existing = assistant?.content.find((part) => part.id === data.reasoningID && part.type === "reasoning")
       upsertAssistantPart(data.assistantMessageID, {
         type: "reasoning",
         id: data.reasoningID,
@@ -419,11 +425,18 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
     if (event.type === "session.next.step.failed") {
       if (event.data.sessionID !== sessionID()) return
       const data = event.data
+      const friendlyError = providerErrorMessage(data.error.message)
       setLiveSessions(data.sessionID, false)
+      setActivity("error", friendlyError)
       mutateMessages((current) =>
         current?.map((message) =>
           message.id === data.assistantMessageID && message.type === "assistant"
-            ? { ...message, finish: "error", error: data.error, time: { ...message.time, completed: data.timestamp } }
+            ? {
+                ...message,
+                finish: "error",
+                error: { ...data.error, message: friendlyError },
+                time: { ...message.time, completed: data.timestamp },
+              }
             : message,
         ),
       )
@@ -573,7 +586,7 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
     const fontZoom = (event: Event) => {
       if (!(event instanceof CustomEvent)) return
       if (event.detail === "reset") {
-        setFontSize(15)
+        setFontSize(12)
         return
       }
       resizeText(event.detail === "out" ? -1 : 1)
@@ -584,7 +597,7 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
       event.preventDefault()
       event.stopImmediatePropagation()
       if (event.key === "0") {
-        setFontSize(15)
+        setFontSize(12)
         return
       }
       resizeText(event.key === "-" ? -1 : 1)
@@ -785,7 +798,7 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
   }
 
   const selectModel = (key: string) => {
-    if (!key.startsWith("custom-litellm/")) {
+    if (!key.startsWith("litellm-proxy/")) {
       void switchModel(key)
       return
     }
@@ -871,506 +884,511 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
       <div class="flex h-full w-full bg-[var(--ph-panel)]">
         <div class="flex min-w-0 flex-1 flex-col">
           <header class="flex h-11 shrink-0 items-center border-b border-[var(--ph-line)] px-2 sm:px-4">
-          <div class="hidden min-w-0 flex-1 items-center gap-3 sm:flex">
-            <strong class="text-[12px] font-bold">PEN<span class="text-[var(--ph-signal)]">/</span>HUB</strong>
-            <span class="h-4 w-px bg-[var(--ph-line)]" />
-            <button
-              type="button"
-              class="group flex min-w-0 items-center gap-2 text-[11px] text-[var(--ph-muted)] hover:text-[var(--ph-ink)]"
-              title="Switch workspace"
-              aria-label="Switch workspace"
-              onClick={openWorkspaceDialog}
-            >
-              <Icon name="folder" size="small" />
-              <span class="truncate group-hover:text-[var(--ph-signal)]">
-                {currentDirectory() || "Connecting"}
-              </span>
-            </button>
-          </div>
-          <nav class="flex h-full shrink-0 items-center gap-3 px-1 sm:px-4" aria-label="Workspace view">
-            <Tab active={mode() === "session"} onClick={() => setMode("session")}>
-              Session
-            </Tab>
-            <Tab active={mode() === "evidence"} onClick={() => setMode("evidence")}>
-              Evidence
-            </Tab>
-          </nav>
-          <div class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1 lg:hidden">
-            <IconButton icon="folder" label="Switch workspace" onClick={openWorkspaceDialog} mobile />
-            <IconButton icon="layout-left" label="Sessions" onClick={() => setMobilePanel("sessions")} mobile />
-            <IconButton icon="layout-right" label="Context" onClick={() => setMobilePanel("context")} mobile />
-          </div>
+            <div class="hidden min-w-0 flex-1 items-center gap-3 sm:flex">
+              <strong class="text-[12px] font-bold">
+                PEN<span class="text-[var(--ph-signal)]">/</span>HUB
+              </strong>
+              <span class="h-4 w-px bg-[var(--ph-line)]" />
+              <button
+                type="button"
+                class="group flex min-w-0 items-center gap-2 text-[11px] text-[var(--ph-muted)] hover:text-[var(--ph-ink)]"
+                title="Switch workspace"
+                aria-label="Switch workspace"
+                onClick={openWorkspaceDialog}
+              >
+                <Icon name="folder" size="small" />
+                <span class="truncate group-hover:text-[var(--ph-signal)]">{currentDirectory() || "Connecting"}</span>
+              </button>
+            </div>
+            <nav class="flex h-full shrink-0 items-center gap-3 px-1 sm:px-4" aria-label="Workspace view">
+              <Tab active={mode() === "session"} onClick={() => setMode("session")}>
+                Session
+              </Tab>
+              <Tab active={mode() === "evidence"} onClick={() => setMode("evidence")}>
+                Evidence
+              </Tab>
+            </nav>
+            <div class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1 lg:hidden">
+              <IconButton icon="folder" label="Switch workspace" onClick={openWorkspaceDialog} mobile />
+              <IconButton icon="layout-left" label="Sessions" onClick={() => setMobilePanel("sessions")} mobile />
+              <IconButton icon="layout-right" label="Context" onClick={() => setMobilePanel("context")} mobile />
+            </div>
           </header>
 
           <Show when={activity.error}>
-          <div class="flex shrink-0 items-center gap-2 border-b border-[var(--ph-signal)] bg-[var(--ph-danger-bg)] px-4 py-2 text-[12px] text-[var(--ph-signal)]">
-            <Icon name="warning" size="small" />
-            <span class="min-w-0 flex-1 truncate">{activity.error}</span>
-            <button class="p-1" title="Dismiss" onClick={() => setActivity("error", undefined)}>
-              <Icon name="close" size="small" />
-            </button>
-          </div>
+            <div class="flex shrink-0 items-center gap-2 border-b border-[var(--ph-signal)] bg-[var(--ph-danger-bg)] px-4 py-2 text-[12px] text-[var(--ph-signal)]">
+              <Icon name="warning" size="small" />
+              <span class="min-w-0 flex-1 truncate">{activity.error}</span>
+              <button class="p-1" title="Dismiss" onClick={() => setActivity("error", undefined)}>
+                <Icon name="close" size="small" />
+              </button>
+            </div>
           </Show>
 
           <Show
-          when={view()}
-          fallback={
-            <div class="grid min-h-0 flex-1 place-items-center text-[12px] text-[var(--ph-muted)]">Loading...</div>
-          }
-        >
-          <div class="relative grid min-h-0 flex-1 lg:grid-cols-[238px_minmax(420px,1fr)]">
-            <aside
-              class={`${mobilePanel() === "sessions" ? "flex" : "hidden"} fixed inset-x-3 bottom-3 top-[52px] z-20 min-h-0 flex-col border border-[var(--ph-line)] bg-[var(--ph-panel)] shadow-xl lg:static lg:flex lg:border-0 lg:border-r lg:shadow-none`}
-            >
-              <div class="flex h-8 shrink-0 items-center justify-between border-b border-[var(--ph-line)] px-2">
-                <button
-                  type="button"
-                  class="grid size-6 place-items-center rounded-full bg-[var(--ph-accent-soft)] text-[var(--ph-signal)] hover:bg-[var(--ph-signal)] hover:text-white disabled:opacity-35"
-                  title="New security session"
-                  aria-label="New security session"
-                  disabled={Boolean(activity.busy)}
-                  onClick={() => void createSession()}
-                >
-                  <Icon name="plus" size="small" />
-                </button>
-                <div class="flex items-center gap-2 text-[9px] text-[var(--ph-muted)]">
-                  <span title="Session count">{rootSessions().length}</span>
+            when={view()}
+            fallback={
+              <div class="grid min-h-0 flex-1 place-items-center text-[12px] text-[var(--ph-muted)]">Loading...</div>
+            }
+          >
+            <div class="relative grid min-h-0 flex-1 lg:grid-cols-[238px_minmax(420px,1fr)]">
+              <aside
+                class={`${mobilePanel() === "sessions" ? "flex" : "hidden"} fixed inset-x-3 bottom-3 top-[52px] z-20 min-h-0 flex-col border border-[var(--ph-line)] bg-[var(--ph-panel)] shadow-xl lg:static lg:flex lg:border-0 lg:border-r lg:shadow-none`}
+              >
+                <div class="flex h-8 shrink-0 items-center justify-between border-b border-[var(--ph-line)] px-2">
                   <button
-                    class="grid size-6 place-items-center rounded-full lg:hidden"
-                    title="Close sessions"
-                    onClick={() => setMobilePanel()}
+                    type="button"
+                    class="grid size-6 place-items-center rounded-full bg-[var(--ph-accent-soft)] text-[var(--ph-signal)] hover:bg-[var(--ph-signal)] hover:text-white disabled:opacity-35"
+                    title="New security session"
+                    aria-label="New security session"
+                    disabled={Boolean(activity.busy)}
+                    onClick={() => void createSession()}
                   >
-                    <Icon name="close" size="small" />
+                    <Icon name="plus" size="small" />
                   </button>
+                  <div class="flex items-center gap-2 text-[9px] text-[var(--ph-muted)]">
+                    <span title="Session count">{rootSessions().length}</span>
+                    <button
+                      class="grid size-6 place-items-center rounded-full lg:hidden"
+                      title="Close sessions"
+                      onClick={() => setMobilePanel()}
+                    >
+                      <Icon name="close" size="small" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div class="min-h-0 flex-1 overflow-y-auto">
-                <For each={rootSessions()} fallback={<Empty label="No sessions in this workspace" compact />}>
-                  {(session) => (
-                    <button
-                      type="button"
-                      class={`min-h-14 w-full border-b border-l-2 border-b-[var(--ph-line)] px-3 py-2 text-left ${familyRootID() === session.id ? "border-l-[var(--ph-signal)] bg-[var(--ph-accent-soft)]" : "border-l-transparent hover:bg-[var(--ph-soft)]"}`}
-                      aria-current={familyRootID() === session.id ? "page" : undefined}
-                      onClick={() => {
-                        setSelectedSession(session.id)
-                        setMobilePanel()
-                      }}
-                    >
-                      <div class="flex items-center gap-2">
-                        <span
-                          class={`size-1.5 shrink-0 rounded-full ${view()?.active[session.id] || liveSessions[session.id] ? "penhub-live-dot bg-[var(--ph-success)]" : familyRootID() === session.id ? "bg-[var(--ph-signal)]" : "bg-[var(--ph-line-strong)]"}`}
-                        />
-                        <span class="min-w-0 flex-1 truncate text-[11px] font-medium">
-                          {sessionDisplayTitle(session)}
-                        </span>
-                      </div>
-                      <div class="mt-1 flex items-center justify-between gap-2 pl-3.5 text-[9px] text-[var(--ph-muted)]">
-                        <span class="truncate">{session.agent ?? "operator"}</span>
-                        <time class="shrink-0" datetime={new Date(session.time.updated).toISOString()}>
-                          {formatSessionTime(session.time.updated)}
-                        </time>
-                      </div>
-                    </button>
-                  )}
-                </For>
-              </div>
-              <FileBrowser
-                entries={sortedFiles()}
-                path={workspacePath()}
-                loading={files.loading}
-                back={() => setWorkspacePath(parentPath(workspacePath()))}
-                select={(entry) => {
-                  if (entry.type === "directory") {
-                    setWorkspacePath(entry.path.replace(/\/$/, ""))
-                    return
-                  }
-                  void attachWorkspaceFile(entry.path).catch((error) => setActivity("error", errorMessage(error)))
-                }}
-              />
-              <AttackState workspace={view()?.state.data.workspace} />
-            </aside>
-
-            <section class="flex min-h-0 min-w-0 flex-col bg-[var(--ph-panel)]">
-              <div class="flex h-8 shrink-0 items-center gap-1 border-b border-[var(--ph-line)] px-2">
-                <Show when={familyRootID()} keyed>
-                  {(rootID) => (
-                    <button
-                      class={`grid size-6 shrink-0 place-items-center rounded-full hover:bg-[var(--ph-soft)] ${sessionID() === rootID ? "bg-[var(--ph-accent-soft)] text-[var(--ph-signal)]" : "text-[var(--ph-muted)]"}`}
-                      title="Primary agent"
-                      aria-label="View primary agent"
-                      onClick={() => setSelectedSession(rootID)}
-                    >
-                      <Icon name="branch" size="small" />
-                    </button>
-                  )}
-                </Show>
-                <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-                  <For each={subagents()}>
-                    {(agent) => (
+                <div class="min-h-0 flex-1 overflow-y-auto">
+                  <For each={rootSessions()} fallback={<Empty label="No sessions in this workspace" compact />}>
+                    {(session) => (
                       <button
-                        class={`flex h-6 shrink-0 items-center gap-1.5 rounded-full border px-2 text-[9px] ${sessionID() === agent.id ? "border-[var(--ph-signal)] bg-[var(--ph-accent-soft)] text-[var(--ph-signal)]" : "border-transparent text-[var(--ph-muted)] hover:bg-[var(--ph-soft)]"}`}
-                        title={agent.title || `View ${subagentLabel(agent)}`}
-                        onClick={() => setSelectedSession(agent.id)}
+                        type="button"
+                        class={`min-h-14 w-full border-b border-l-2 border-b-[var(--ph-line)] px-3 py-2 text-left ${familyRootID() === session.id ? "border-l-[var(--ph-signal)] bg-[var(--ph-accent-soft)]" : "border-l-transparent hover:bg-[var(--ph-soft)]"}`}
+                        aria-current={familyRootID() === session.id ? "page" : undefined}
+                        onClick={() => {
+                          setSelectedSession(session.id)
+                          setMobilePanel()
+                        }}
                       >
-                        <span
-                          class={`size-1.5 rounded-full ${view()?.active[agent.id] ? "penhub-live-dot bg-[var(--ph-success)]" : "bg-[var(--ph-tool)]"}`}
-                        />
-                        <span class="max-w-36 truncate">{subagentLabel(agent)}</span>
+                        <div class="flex items-center gap-2">
+                          <span
+                            class={`size-1.5 shrink-0 rounded-full ${view()?.active[session.id] || liveSessions[session.id] ? "penhub-live-dot bg-[var(--ph-success)]" : familyRootID() === session.id ? "bg-[var(--ph-signal)]" : "bg-[var(--ph-line-strong)]"}`}
+                          />
+                          <span class="min-w-0 flex-1 truncate text-[11px] font-medium">
+                            {sessionDisplayTitle(session)}
+                          </span>
+                        </div>
+                        <div class="mt-1 flex items-center justify-between gap-2 pl-3.5 text-[9px] text-[var(--ph-muted)]">
+                          <span class="truncate">{session.agent ?? "operator"}</span>
+                          <time class="shrink-0" datetime={new Date(session.time.updated).toISOString()}>
+                            {formatSessionTime(session.time.updated)}
+                          </time>
+                        </div>
                       </button>
                     )}
                   </For>
                 </div>
-                <div class="flex shrink-0 items-center pl-1">
-                  <span
-                    class={`size-1.5 rounded-full ${running() ? "penhub-live-dot bg-[var(--ph-success)]" : "bg-[var(--ph-line)]"}`}
-                    title={running() ? "Session running" : "Session idle"}
-                    aria-label={running() ? "Session running" : "Session idle"}
-                  />
-                </div>
-              </div>
-
-              <Show when={mode() === "session"} fallback={<Evidence workspace={view()?.state.data.workspace} />}>
-                <div
-                  ref={transcript}
-                  class="min-h-0 flex-1 overflow-y-auto"
-                  onWheel={(event) => {
-                    if (event.deltaY < 0) followTranscript = false
-                  }}
-                  onTouchStart={() => {
-                    followTranscript = false
-                  }}
-                  onPointerDown={(event) => {
-                    if (event.clientX >= event.currentTarget.getBoundingClientRect().right - 16) {
-                      followTranscript = false
+                <FileBrowser
+                  entries={sortedFiles()}
+                  path={workspacePath()}
+                  loading={files.loading}
+                  back={() => setWorkspacePath(parentPath(workspacePath()))}
+                  select={(entry) => {
+                    if (entry.type === "directory") {
+                      setWorkspacePath(entry.path.replace(/\/$/, ""))
+                      return
                     }
+                    void attachWorkspaceFile(entry.path).catch((error) => setActivity("error", errorMessage(error)))
                   }}
-                  onScroll={(event) => {
-                    const element = event.currentTarget
-                    followTranscript = element.scrollHeight - element.scrollTop - element.clientHeight < 24
-                  }}
-                >
-                  <div class="mx-auto w-full max-w-[1280px] px-3 sm:px-4">
-                    <For each={messages()} fallback={<SessionEmpty />}>
-                      {(message) => (
-                        <SessionMessage
-                          message={message}
-                          theme={theme()}
-                          fontSize={fontSize()}
-                          streaming={running() && message.type === "assistant" && !message.time.completed}
-                        />
+                />
+                <AttackState workspace={view()?.state.data.workspace} />
+              </aside>
+
+              <section class="flex min-h-0 min-w-0 flex-col bg-[var(--ph-panel)]">
+                <div class="flex h-8 shrink-0 items-center gap-1 border-b border-[var(--ph-line)] px-2">
+                  <Show when={familyRootID()} keyed>
+                    {(rootID) => (
+                      <button
+                        class={`grid size-6 shrink-0 place-items-center rounded-full hover:bg-[var(--ph-soft)] ${sessionID() === rootID ? "bg-[var(--ph-accent-soft)] text-[var(--ph-signal)]" : "text-[var(--ph-muted)]"}`}
+                        title="Primary agent"
+                        aria-label="View primary agent"
+                        onClick={() => setSelectedSession(rootID)}
+                      >
+                        <Icon name="branch" size="small" />
+                      </button>
+                    )}
+                  </Show>
+                  <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+                    <For each={subagents()}>
+                      {(agent) => (
+                        <button
+                          class={`flex h-6 shrink-0 items-center gap-1.5 rounded-full border px-2 text-[9px] ${sessionID() === agent.id ? "border-[var(--ph-signal)] bg-[var(--ph-accent-soft)] text-[var(--ph-signal)]" : "border-transparent text-[var(--ph-muted)] hover:bg-[var(--ph-soft)]"}`}
+                          title={agent.title || `View ${subagentLabel(agent)}`}
+                          onClick={() => setSelectedSession(agent.id)}
+                        >
+                          <span
+                            class={`size-1.5 rounded-full ${view()?.active[agent.id] ? "penhub-live-dot bg-[var(--ph-success)]" : "bg-[var(--ph-tool)]"}`}
+                          />
+                          <span class="max-w-36 truncate">{subagentLabel(agent)}</span>
+                        </button>
                       )}
                     </For>
                   </div>
+                  <div class="flex shrink-0 items-center pl-1">
+                    <span
+                      class={`size-1.5 rounded-full ${running() ? "penhub-live-dot bg-[var(--ph-success)]" : "bg-[var(--ph-line)]"}`}
+                      title={running() ? "Session running" : "Session idle"}
+                      aria-label={running() ? "Session running" : "Session idle"}
+                    />
+                  </div>
                 </div>
 
-                <Show when={visiblePermission()} keyed>
-                  {(request) => <PermissionDock request={request} reply={replyPermission} />}
-                </Show>
-                <Show when={pending()?.questions[0]} keyed>
-                  {(request) => <QuestionDock request={request} reply={replyQuestion} />}
-                </Show>
-
-                <form
-                  class="shrink-0 border-t border-[var(--ph-line)] bg-[var(--ph-bg)] p-2.5"
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    void submitPrompt()
-                  }}
-                >
+                <Show when={mode() === "session"} fallback={<Evidence workspace={view()?.state.data.workspace} />}>
                   <div
-                    class="penhub-composer mx-auto w-full max-w-[1280px] border border-[var(--ph-line)] bg-[var(--ph-panel)] p-2"
-                    classList={{ "penhub-composer-dragging": draggingFiles() }}
-                    onDragOver={(event) => {
-                      if (!event.dataTransfer?.types.includes("Files")) return
-                      event.preventDefault()
-                      setDraggingFiles(true)
+                    ref={transcript}
+                    class="min-h-0 flex-1 overflow-y-auto"
+                    onWheel={(event) => {
+                      if (event.deltaY < 0) followTranscript = false
                     }}
-                    onDragLeave={(event) => {
-                      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
-                      setDraggingFiles(false)
+                    onTouchStart={() => {
+                      followTranscript = false
                     }}
-                    onDrop={(event) => {
-                      event.preventDefault()
-                      setDraggingFiles(false)
-                      void addAttachments(Array.from(event.dataTransfer?.files ?? []))
+                    onPointerDown={(event) => {
+                      if (event.clientX >= event.currentTarget.getBoundingClientRect().right - 16) {
+                        followTranscript = false
+                      }
+                    }}
+                    onScroll={(event) => {
+                      const element = event.currentTarget
+                      followTranscript = element.scrollHeight - element.scrollTop - element.clientHeight < 24
                     }}
                   >
-                    <input
-                      ref={attachmentInput}
-                      type="file"
-                      multiple
-                      accept={ACCEPTED_FILE_TYPES.join(",")}
-                      class="hidden"
-                      onChange={(event) => {
-                        void addAttachments(Array.from(event.currentTarget.files ?? []))
-                        event.currentTarget.value = ""
+                    <div class="mx-auto w-full max-w-[1280px] px-3 sm:px-4">
+                      <For each={messages()} fallback={<SessionEmpty />}>
+                        {(message) => (
+                          <SessionMessage
+                            message={message}
+                            theme={theme()}
+                            fontSize={fontSize()}
+                            streaming={running() && message.type === "assistant" && !message.time.completed}
+                          />
+                        )}
+                      </For>
+                    </div>
+                  </div>
+
+                  <Show when={visiblePermission()} keyed>
+                    {(request) => <PermissionDock request={request} reply={replyPermission} />}
+                  </Show>
+                  <Show when={pending()?.questions[0]} keyed>
+                    {(request) => <QuestionDock request={request} reply={replyQuestion} />}
+                  </Show>
+
+                  <form
+                    class="shrink-0 border-t border-[var(--ph-line)] bg-[var(--ph-bg)] p-2.5"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      void submitPrompt()
+                    }}
+                  >
+                    <div
+                      class="penhub-composer mx-auto w-full max-w-[1280px] border border-[var(--ph-line)] bg-[var(--ph-panel)] p-2"
+                      classList={{ "penhub-composer-dragging": draggingFiles() }}
+                      onDragOver={(event) => {
+                        if (!event.dataTransfer?.types.includes("Files")) return
+                        event.preventDefault()
+                        setDraggingFiles(true)
                       }}
-                    />
-                    <Show when={attachments().length > 0}>
-                      <div class="mb-1.5 flex max-h-24 flex-wrap gap-1.5 overflow-y-auto px-1 pt-0.5">
-                        <For each={attachments()}>
-                          {(file) => (
-                            <div class="penhub-attachment group flex h-8 max-w-48 items-center gap-1.5 border border-[var(--ph-line)] bg-[var(--ph-bg)] pr-1.5">
-                              <Show
-                                when={file.mime.startsWith("image/")}
-                                fallback={<Icon name="file-tree" size="small" />}
-                              >
-                                <img src={file.uri} alt="" class="size-7 rounded-md object-cover" />
-                              </Show>
-                              <span class="min-w-0 flex-1 truncate text-[9px]" title={file.name}>
-                                {file.name}
-                              </span>
-                              <button
-                                type="button"
-                                class="grid size-5 shrink-0 place-items-center rounded-full text-[var(--ph-muted)] hover:bg-[var(--ph-soft)] hover:text-[var(--ph-ink)]"
-                                title={`Remove ${file.name}`}
-                                aria-label={`Remove ${file.name}`}
-                                onClick={() =>
-                                  setAttachments((current) => current.filter((item) => item.id !== file.id))
-                                }
-                              >
-                                <Icon name="close-small" size="small" />
-                              </button>
-                            </div>
+                      onDragLeave={(event) => {
+                        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+                        setDraggingFiles(false)
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault()
+                        setDraggingFiles(false)
+                        void addAttachments(Array.from(event.dataTransfer?.files ?? []))
+                      }}
+                    >
+                      <input
+                        ref={attachmentInput}
+                        type="file"
+                        multiple
+                        accept={ACCEPTED_FILE_TYPES.join(",")}
+                        class="hidden"
+                        onChange={(event) => {
+                          void addAttachments(Array.from(event.currentTarget.files ?? []))
+                          event.currentTarget.value = ""
+                        }}
+                      />
+                      <Show when={attachments().length > 0}>
+                        <div class="mb-1.5 flex max-h-24 flex-wrap gap-1.5 overflow-y-auto px-1 pt-0.5">
+                          <For each={attachments()}>
+                            {(file) => (
+                              <div class="penhub-attachment group flex h-8 max-w-48 items-center gap-1.5 border border-[var(--ph-line)] bg-[var(--ph-bg)] pr-1.5">
+                                <Show
+                                  when={file.mime.startsWith("image/")}
+                                  fallback={<Icon name="file-tree" size="small" />}
+                                >
+                                  <img src={file.uri} alt="" class="size-7 rounded-md object-cover" />
+                                </Show>
+                                <span class="min-w-0 flex-1 truncate text-[9px]" title={file.name}>
+                                  {file.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  class="grid size-5 shrink-0 place-items-center rounded-full text-[var(--ph-muted)] hover:bg-[var(--ph-soft)] hover:text-[var(--ph-ink)]"
+                                  title={`Remove ${file.name}`}
+                                  aria-label={`Remove ${file.name}`}
+                                  onClick={() =>
+                                    setAttachments((current) => current.filter((item) => item.id !== file.id))
+                                  }
+                                >
+                                  <Icon name="close-small" size="small" />
+                                </button>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                      <textarea
+                        class="max-h-32 min-h-10 w-full resize-none bg-transparent px-1 py-0.5 text-[11px] leading-5 outline-none placeholder:text-[var(--ph-muted)]"
+                        value={prompt()}
+                        onInput={(event) => setPrompt(event.currentTarget.value)}
+                        onPaste={(event) => {
+                          const files = Array.from(event.clipboardData?.files ?? [])
+                          if (files.length === 0) return
+                          event.preventDefault()
+                          void addAttachments(files)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" || event.shiftKey) return
+                          event.preventDefault()
+                          void submitPrompt()
+                        }}
+                        placeholder="Target, scope, goal, and available artifacts"
+                        aria-label="Security prompt"
+                      />
+                      <div class="mt-1 flex items-center justify-between gap-2 border-t border-[var(--ph-line)] pt-1.5">
+                        <div class="flex min-w-0 items-center gap-1 overflow-x-auto">
+                          <IconButton
+                            icon="cloud-upload"
+                            label="Attach images or files"
+                            onClick={() => attachmentInput?.click()}
+                          />
+                          <button
+                            type="button"
+                            class={`penhub-control relative grid size-8 shrink-0 place-items-center rounded-full ${alwaysApprove() ? "border-[var(--ph-success)] text-[var(--ph-success)]" : "text-[var(--ph-muted)]"}`}
+                            title={alwaysApprove() ? "Full permissions enabled" : "Enable full permissions"}
+                            aria-label={alwaysApprove() ? "Disable full permissions" : "Enable full permissions"}
+                            aria-pressed={alwaysApprove()}
+                            onClick={toggleAlwaysApprove}
+                          >
+                            <Icon name="shield" size="small" />
+                            <Show when={alwaysApprove()}>
+                              <span class="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-[var(--ph-success)]" />
+                            </Show>
+                          </button>
+                          <IconButton
+                            icon="archive"
+                            label="Compact context"
+                            disabled={!sessionID() || Boolean(activity.busy)}
+                            onClick={() => {
+                              const id = sessionID()
+                              if (id)
+                                void runAction("compact", () => client().sessions.compact({ sessionID: id }), true)
+                            }}
+                          />
+                          <IconButton
+                            icon="eye"
+                            label={theme() === "dark" ? "Use light theme" : "Use dark theme"}
+                            onClick={() => setTheme(theme() === "light" ? "dark" : "light")}
+                          />
+                          <IconButton
+                            icon="download"
+                            label="Generate report"
+                            disabled={activity.busy === "report" || !view()?.state.data.initialized}
+                            onClick={() => void runAction("report", () => client()["server.penhub"].generate())}
+                          />
+                          <Show when={running()}>
+                            <IconButton
+                              icon="stop"
+                              label="Stop response"
+                              disabled={Boolean(activity.busy)}
+                              onClick={() => {
+                                const id = sessionID()
+                                if (id)
+                                  void runAction(
+                                    "interrupt",
+                                    () => client().sessions.interrupt({ sessionID: id }),
+                                    true,
+                                  )
+                              }}
+                            />
+                          </Show>
+                        </div>
+                        <button
+                          type="submit"
+                          class="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ph-signal)] text-white hover:brightness-110 disabled:opacity-35"
+                          disabled={Boolean(activity.busy) || (!prompt().trim() && attachments().length === 0)}
+                          title="Send"
+                          aria-label="Send"
+                        >
+                          <Icon name="arrow-up" size="small" />
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </Show>
+              </section>
+            </div>
+          </Show>
+        </div>
+        <Show when={view()}>
+          <aside
+            class={`${mobilePanel() === "context" ? "flex" : "hidden"} fixed inset-3 z-20 min-h-0 flex-col border border-[var(--ph-line)] bg-[var(--ph-panel)] shadow-xl lg:static lg:flex lg:w-[272px] lg:shrink-0 lg:border-0 lg:border-l lg:shadow-none`}
+          >
+            <div class="flex h-11 shrink-0 items-center gap-1 border-b border-[var(--ph-line)] px-2">
+              <RuntimeControl
+                icon="robot"
+                label="Agent"
+                active={runtimePanel() === "agent"}
+                onClick={() => setRuntimePanel(runtimePanel() === "agent" ? undefined : "agent")}
+              />
+              <RuntimeControl
+                icon="brain"
+                label="Model"
+                active={runtimePanel() === "model"}
+                onClick={() => setRuntimePanel(runtimePanel() === "model" ? undefined : "model")}
+              />
+              <RuntimeControl
+                icon="providers"
+                label="Provider API"
+                active={runtimePanel() === "provider"}
+                onClick={() => setRuntimePanel(runtimePanel() === "provider" ? undefined : "provider")}
+              />
+              <button
+                type="button"
+                class="ml-auto grid size-7 place-items-center rounded-full text-[var(--ph-muted)] hover:bg-[var(--ph-soft)] hover:text-[var(--ph-ink)] lg:hidden"
+                title="Close runtime"
+                aria-label="Close runtime"
+                onClick={() => setMobilePanel()}
+              >
+                <Icon name="close" size="small" />
+              </button>
+            </div>
+
+            <Show when={runtimePanel()} keyed>
+              {(panel) => (
+                <div class="shrink-0 border-b border-[var(--ph-line)] p-3">
+                  <Switch>
+                    <Match when={panel === "agent"}>
+                      <select
+                        class="penhub-control h-9 w-full px-2 text-[11px]"
+                        value={chosenAgent()}
+                        aria-label="Agent"
+                        onChange={(event) => void switchAgent(event.currentTarget.value)}
+                      >
+                        <For each={agents()?.data.filter((item) => !item.hidden)}>
+                          {(agent) => <option value={agent.id}>{agent.id}</option>}
+                        </For>
+                      </select>
+                      <p class="mt-2 text-[10px] leading-4 text-[var(--ph-muted)]">
+                        {agents()?.data.find((item) => item.id === chosenAgent())?.description ?? "Security operator"}
+                      </p>
+                    </Match>
+                    <Match when={panel === "model"}>
+                      <select
+                        class="penhub-control h-9 w-full px-2 text-[10px]"
+                        value={chosenModel()}
+                        aria-label="Model"
+                        onChange={(event) => selectModel(event.currentTarget.value)}
+                      >
+                        <For each={availableModels()}>
+                          {(model) => (
+                            <option value={modelKey(model)}>
+                              {model.providerID === "litellm-proxy"
+                                ? "local_litellm"
+                                : `${model.providerID} / ${model.name}`}
+                            </option>
                           )}
                         </For>
-                      </div>
-                    </Show>
-                    <textarea
-                      class="max-h-32 min-h-10 w-full resize-none bg-transparent px-1 py-0.5 text-[11px] leading-5 outline-none placeholder:text-[var(--ph-muted)]"
-                      value={prompt()}
-                      onInput={(event) => setPrompt(event.currentTarget.value)}
-                      onPaste={(event) => {
-                        const files = Array.from(event.clipboardData?.files ?? [])
-                        if (files.length === 0) return
-                        event.preventDefault()
-                        void addAttachments(files)
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" || event.shiftKey) return
-                        event.preventDefault()
-                        void submitPrompt()
-                      }}
-                      placeholder="Target, scope, goal, and available artifacts"
-                      aria-label="Security prompt"
-                    />
-                    <div class="mt-1 flex items-center justify-between gap-2 border-t border-[var(--ph-line)] pt-1.5">
-                      <div class="flex min-w-0 items-center gap-1 overflow-x-auto">
-                        <IconButton
-                          icon="cloud-upload"
-                          label="Attach images or files"
-                          onClick={() => attachmentInput?.click()}
+                      </select>
+                      <Show when={lastAssistantError(messages())}>
+                        <p class="mt-2 text-[10px] leading-4 text-[var(--ph-signal)]">
+                          Previous provider failed. New prompts use the selected model.
+                        </p>
+                      </Show>
+                    </Match>
+                    <Match when={panel === "provider"}>
+                      <select
+                        class="penhub-control h-9 w-full px-2 text-[11px]"
+                        value={integrationID()}
+                        aria-label="Provider"
+                        onChange={(event) => setIntegrationID(event.currentTarget.value)}
+                      >
+                        <option value="">Choose provider</option>
+                        <For each={keyIntegrations(catalog()?.integrations)}>
+                          {(integration) => (
+                            <option value={integration.id}>
+                              {integration.name}
+                              {integration.connections.length ? " (connected)" : ""}
+                            </option>
+                          )}
+                        </For>
+                      </select>
+                      <div class="mt-2 flex gap-1">
+                        <input
+                          type="password"
+                          class="penhub-control h-9 min-w-0 flex-1 px-2 text-[11px]"
+                          value={apiKey()}
+                          onInput={(event) => setApiKey(event.currentTarget.value)}
+                          placeholder="API key"
+                          aria-label="Provider API key"
                         />
                         <button
                           type="button"
-                          class={`penhub-control relative grid size-8 shrink-0 place-items-center rounded-full ${alwaysApprove() ? "border-[var(--ph-success)] text-[var(--ph-success)]" : "text-[var(--ph-muted)]"}`}
-                          title={alwaysApprove() ? "Full permissions enabled" : "Enable full permissions"}
-                          aria-label={alwaysApprove() ? "Disable full permissions" : "Enable full permissions"}
-                          aria-pressed={alwaysApprove()}
-                          onClick={toggleAlwaysApprove}
+                          class="penhub-control h-9 px-3 text-[10px] font-medium"
+                          disabled={!integrationID() || !apiKey().trim() || activity.busy === "connect"}
+                          onClick={() => void connectProvider()}
                         >
-                          <Icon name="shield" size="small" />
-                          <Show when={alwaysApprove()}>
-                            <span class="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-[var(--ph-success)]" />
-                          </Show>
+                          Connect
                         </button>
-                        <IconButton
-                          icon="archive"
-                          label="Compact context"
-                          disabled={!sessionID() || Boolean(activity.busy)}
-                          onClick={() => {
-                            const id = sessionID()
-                            if (id) void runAction("compact", () => client().sessions.compact({ sessionID: id }), true)
-                          }}
-                        />
-                        <IconButton
-                          icon="eye"
-                          label={theme() === "dark" ? "Use light theme" : "Use dark theme"}
-                          onClick={() => setTheme(theme() === "light" ? "dark" : "light")}
-                        />
-                        <IconButton
-                          icon="download"
-                          label="Generate report"
-                          disabled={activity.busy === "report" || !view()?.state.data.initialized}
-                          onClick={() => void runAction("report", () => client()["server.penhub"].generate())}
-                        />
-                        <Show when={running()}>
-                          <IconButton
-                            icon="stop"
-                            label="Stop response"
-                            disabled={Boolean(activity.busy)}
-                            onClick={() => {
-                              const id = sessionID()
-                              if (id) void runAction("interrupt", () => client().sessions.interrupt({ sessionID: id }), true)
-                            }}
-                          />
-                        </Show>
                       </div>
-                      <button
-                        type="submit"
-                        class="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ph-signal)] text-white hover:brightness-110 disabled:opacity-35"
-                        disabled={Boolean(activity.busy) || (!prompt().trim() && attachments().length === 0)}
-                        title="Send"
-                        aria-label="Send"
-                      >
-                        <Icon name="arrow-up" size="small" />
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </Show>
-            </section>
+                    </Match>
+                  </Switch>
+                </div>
+              )}
+            </Show>
 
-          </div>
+            <div class="min-h-0 flex-1 overflow-y-auto">
+              <SideSection
+                title="Tool packs"
+                meta={`${view()?.tools.data.filter((item) => item.installed).length ?? 0}/6 cached`}
+              >
+                <For each={view()?.tools.data}>
+                  {(pack) => (
+                    <details class="border-b border-[var(--ph-line)] py-2 last:border-0">
+                      <summary class="flex cursor-pointer list-none items-center gap-2 text-[11px] font-medium capitalize">
+                        <span
+                          class={`size-1.5 rounded-full ${pack.installed ? "bg-[var(--ph-success)]" : "bg-[var(--ph-tool)]"}`}
+                        />
+                        <span class="flex-1">{pack.id}</span>
+                        <span class="text-[9px] font-normal text-[var(--ph-muted)]">
+                          {pack.installed ? "cached" : "pulls on use"}
+                        </span>
+                      </summary>
+                      <p class="mt-2 text-[10px] leading-4 text-[var(--ph-muted)]">{pack.description}</p>
+                      <div class="mt-2 flex flex-wrap gap-1">
+                        <For each={pack.tools}>
+                          {(tool) => <code class="bg-[var(--ph-soft)] px-1.5 py-1 text-[9px]">{tool.command}</code>}
+                        </For>
+                      </div>
+                    </details>
+                  )}
+                </For>
+              </SideSection>
+            </div>
+          </aside>
         </Show>
-      </div>
-      <Show when={view()}>
-        <aside
-          class={`${mobilePanel() === "context" ? "flex" : "hidden"} fixed inset-3 z-20 min-h-0 flex-col border border-[var(--ph-line)] bg-[var(--ph-panel)] shadow-xl lg:static lg:flex lg:w-[272px] lg:shrink-0 lg:border-0 lg:border-l lg:shadow-none`}
-        >
-          <div class="flex h-11 shrink-0 items-center gap-1 border-b border-[var(--ph-line)] px-2">
-            <RuntimeControl
-              icon="robot"
-              label="Agent"
-              active={runtimePanel() === "agent"}
-              onClick={() => setRuntimePanel(runtimePanel() === "agent" ? undefined : "agent")}
-            />
-            <RuntimeControl
-              icon="brain"
-              label="Model"
-              active={runtimePanel() === "model"}
-              onClick={() => setRuntimePanel(runtimePanel() === "model" ? undefined : "model")}
-            />
-            <RuntimeControl
-              icon="providers"
-              label="Provider API"
-              active={runtimePanel() === "provider"}
-              onClick={() => setRuntimePanel(runtimePanel() === "provider" ? undefined : "provider")}
-            />
-            <button
-              type="button"
-              class="ml-auto grid size-7 place-items-center rounded-full text-[var(--ph-muted)] hover:bg-[var(--ph-soft)] hover:text-[var(--ph-ink)] lg:hidden"
-              title="Close runtime"
-              aria-label="Close runtime"
-              onClick={() => setMobilePanel()}
-            >
-              <Icon name="close" size="small" />
-            </button>
-          </div>
-
-          <Show when={runtimePanel()} keyed>
-            {(panel) => (
-              <div class="shrink-0 border-b border-[var(--ph-line)] p-3">
-                <Switch>
-                  <Match when={panel === "agent"}>
-                    <select
-                      class="penhub-control h-9 w-full px-2 text-[11px]"
-                      value={chosenAgent()}
-                      aria-label="Agent"
-                      onChange={(event) => void switchAgent(event.currentTarget.value)}
-                    >
-                      <For each={agents()?.data.filter((item) => !item.hidden)}>
-                        {(agent) => <option value={agent.id}>{agent.id}</option>}
-                      </For>
-                    </select>
-                    <p class="mt-2 text-[10px] leading-4 text-[var(--ph-muted)]">
-                      {agents()?.data.find((item) => item.id === chosenAgent())?.description ?? "Security operator"}
-                    </p>
-                  </Match>
-                  <Match when={panel === "model"}>
-                    <select
-                      class="penhub-control h-9 w-full px-2 text-[10px]"
-                      value={chosenModel()}
-                      aria-label="Model"
-                      onChange={(event) => selectModel(event.currentTarget.value)}
-                    >
-                      <For each={availableModels()}>
-                        {(model) => (
-                          <option value={modelKey(model)}>
-                            {model.providerID === "custom-litellm"
-                              ? "custom_litellm"
-                              : `${model.providerID} / ${model.name}`}
-                          </option>
-                        )}
-                      </For>
-                    </select>
-                    <Show when={lastAssistantError(messages())}>
-                      <p class="mt-2 text-[10px] leading-4 text-[var(--ph-signal)]">
-                        Previous provider failed. New prompts use the selected model.
-                      </p>
-                    </Show>
-                  </Match>
-                  <Match when={panel === "provider"}>
-                    <select
-                      class="penhub-control h-9 w-full px-2 text-[11px]"
-                      value={integrationID()}
-                      aria-label="Provider"
-                      onChange={(event) => setIntegrationID(event.currentTarget.value)}
-                    >
-                      <option value="">Choose provider</option>
-                      <For each={keyIntegrations(catalog()?.integrations)}>
-                        {(integration) => (
-                          <option value={integration.id}>
-                            {integration.name}
-                            {integration.connections.length ? " (connected)" : ""}
-                          </option>
-                        )}
-                      </For>
-                    </select>
-                    <div class="mt-2 flex gap-1">
-                      <input
-                        type="password"
-                        class="penhub-control h-9 min-w-0 flex-1 px-2 text-[11px]"
-                        value={apiKey()}
-                        onInput={(event) => setApiKey(event.currentTarget.value)}
-                        placeholder="API key"
-                        aria-label="Provider API key"
-                      />
-                      <button
-                        type="button"
-                        class="penhub-control h-9 px-3 text-[10px] font-medium"
-                        disabled={!integrationID() || !apiKey().trim() || activity.busy === "connect"}
-                        onClick={() => void connectProvider()}
-                      >
-                        Connect
-                      </button>
-                    </div>
-                  </Match>
-                </Switch>
-              </div>
-            )}
-          </Show>
-
-          <div class="min-h-0 flex-1 overflow-y-auto">
-            <SideSection
-              title="Tool packs"
-              meta={`${view()?.tools.data.filter((item) => item.installed).length ?? 0}/6 cached`}
-            >
-              <For each={view()?.tools.data}>
-                {(pack) => (
-                  <details class="border-b border-[var(--ph-line)] py-2 last:border-0">
-                    <summary class="flex cursor-pointer list-none items-center gap-2 text-[11px] font-medium capitalize">
-                      <span
-                        class={`size-1.5 rounded-full ${pack.installed ? "bg-[var(--ph-success)]" : "bg-[var(--ph-tool)]"}`}
-                      />
-                      <span class="flex-1">{pack.id}</span>
-                      <span class="text-[9px] font-normal text-[var(--ph-muted)]">
-                        {pack.installed ? "cached" : "pulls on use"}
-                      </span>
-                    </summary>
-                    <p class="mt-2 text-[10px] leading-4 text-[var(--ph-muted)]">{pack.description}</p>
-                    <div class="mt-2 flex flex-wrap gap-1">
-                      <For each={pack.tools}>
-                        {(tool) => <code class="bg-[var(--ph-soft)] px-1.5 py-1 text-[9px]">{tool.command}</code>}
-                      </For>
-                    </div>
-                  </details>
-                )}
-              </For>
-            </SideSection>
-          </div>
-        </aside>
-      </Show>
       </div>
       <Show when={liteLLMDialog()}>
         <LiteLLMDialog
@@ -1466,8 +1484,12 @@ function WorkspaceDialog(props: {
         aria-labelledby="workspace-title"
       >
         <header class="flex h-10 items-center gap-2 border-b border-[var(--ph-line)] px-3">
-          <span class="text-[var(--ph-signal)]"><Icon name="folder" size="small" /></span>
-          <h2 id="workspace-title" class="text-[11px] font-bold">Switch workspace</h2>
+          <span class="text-[var(--ph-signal)]">
+            <Icon name="folder" size="small" />
+          </span>
+          <h2 id="workspace-title" class="text-[11px] font-bold">
+            Switch workspace
+          </h2>
           <button
             type="button"
             class="ml-auto grid size-7 place-items-center rounded-full text-[var(--ph-muted)] hover:bg-[var(--ph-soft)] hover:text-[var(--ph-ink)]"
@@ -1487,7 +1509,9 @@ function WorkspaceDialog(props: {
                 disabled={props.busy}
                 onClick={() => props.choose(directory)}
               >
-                <span class={`size-1.5 shrink-0 rounded-full ${directory === props.current ? "bg-[var(--ph-signal)]" : "bg-[var(--ph-line-strong)]"}`} />
+                <span
+                  class={`size-1.5 shrink-0 rounded-full ${directory === props.current ? "bg-[var(--ph-signal)]" : "bg-[var(--ph-line-strong)]"}`}
+                />
                 <span class="min-w-0 flex-1 truncate text-[10px]">{directory}</span>
                 <Show when={directory === props.current}>
                   <span class="text-[8px] font-bold uppercase">current</span>
@@ -1767,7 +1791,7 @@ function SessionMessage(props: {
                   {(error) => (
                     <div class="border-l-2 border-[var(--ph-signal)] bg-[var(--ph-danger-bg)] px-3 py-2 text-[12px] leading-5 text-[var(--ph-signal)]">
                       <strong class="block text-[10px] uppercase">Provider error</strong>
-                      {error.message}
+                      {providerErrorMessage(error.message)}
                     </div>
                   )}
                 </Show>
@@ -2232,6 +2256,16 @@ function errorMessage(error: unknown) {
     return error.message
   }
   return String(error)
+}
+
+function providerErrorMessage(message: string) {
+  if (message.includes("managed_inference_model_disabled"))
+    return "This model is disabled for your OpenCode organization. Choose another model or connect a different provider."
+  if (message.includes("billing_insufficient_balance"))
+    return "Your OpenCode account has insufficient inference credit. Add at least $0.50 or connect a different provider."
+  if (message.includes("Invalid API key"))
+    return "The selected provider rejected its API key. Reconnect that provider or choose another one."
+  return message
 }
 
 function streamPartKey(messageID: string, partID: string) {

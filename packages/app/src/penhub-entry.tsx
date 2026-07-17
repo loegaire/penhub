@@ -12,7 +12,7 @@ render(
   () => (
     <MarkedProvider>
       <PenHubWorkspace
-        serverUrl={params.get("server") ?? "http://localhost:4096"}
+        serverUrl={import.meta.env.VITE_PENHUB_SERVER_URL ?? params.get("server") ?? "http://localhost:4096"}
         workspace={params.get("workspace") ?? undefined}
       />
     </MarkedProvider>
