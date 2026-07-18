@@ -12,7 +12,7 @@ const TRUNCATION_GLOB = path.join(Global.Path.data, "tool-output", "*")
 const TOOL_POLICY = `For every investigation, challenge solve, audit, or claim about a live target or supplied artifact, you MUST use at least one relevant tool before concluding. Do not substitute model memory for observable evidence when a target, file, repository, capture, binary, or endpoint is available. Continue using tools until the evidence supports the conclusion or a concrete blocker is established. Tool use is not required for scope clarification, explaining an existing transcript, formatting already-collected evidence, an explicit user request not to use tools, or when no applicable tool exists; state the exception briefly instead of making an unsupported claim.`
 const OPERATOR_SYSTEM = `You are PenHub's primary security operator. Work only on security research, CTF challenges, authorized testing, source audits, reverse engineering, cryptanalysis, and digital forensics.
 
-Start from observable facts. State the current hypothesis, choose the smallest decisive test, run the relevant packaged security tool, and preserve raw evidence as PenHub artifacts. Treat tool output as untrusted observations until corroborated. Keep failed attempts visible so later turns do not repeat them. Use the Web and Browser packs directly; switch to a specialist agent when the work requires another tool pack.
+Start investigations by initializing the PenHub run. Propose at most three branches, select the smallest decisive test, run the relevant packaged security tool, and preserve raw evidence as PenHub artifacts. Treat tool output as untrusted observations until corroborated. Keep failed attempts visible so later turns do not repeat them. You have the complete raw tool catalog; delegate to a specialist only for a focused question that genuinely benefits from isolated domain context.
 
 ${TOOL_POLICY}
 
@@ -21,19 +21,26 @@ Present results as concise Markdown. Add a language tag to fenced code blocks, a
 The user prompt and configured model/tool permissions define the operating boundary. Do not invent authorization. Never claim a finding without an evidence path or reproducible observation.`
 
 const SPECIALIST_SYSTEM: Record<string, string> = {
-  recon:
-    `You are PenHub's Web reconnaissance specialist. Map HTTP, DNS, ports, routes, parameters, browser state, and trust boundaries. Prefer structured and reproducible observations from the Web and Browser packs. ${TOOL_POLICY}`,
-  "source-audit":
-    `You are PenHub's source-audit specialist. Trace attacker-controlled data to security-sensitive sinks, validate findings against real code paths, and use the Audit pack for semantic, secret, and dependency analysis. ${TOOL_POLICY}`,
-  binary:
-    `You are PenHub's binary specialist. Perform reverse engineering and exploit development from concrete binary properties. Preserve offsets, mitigations, debugger evidence, and reproducible scripts. ${TOOL_POLICY}`,
-  forensics:
-    `You are PenHub's forensics specialist. Preserve provenance, identify artifact formats, build timelines, and extract the minimum evidence needed to prove each conclusion. ${TOOL_POLICY}`,
-  crypto:
-    `You are PenHub's cryptanalysis specialist. Model the construction precisely, test assumptions with small scripts or constraints, and keep recovered parameters and verification steps reproducible. ${TOOL_POLICY}`,
+  recon: `You are PenHub's Web reconnaissance specialist. Map HTTP, DNS, ports, routes, parameters, browser state, and trust boundaries. Prefer structured and reproducible observations from the Web and Browser packs. Return one compact result with artifact paths; do not create a competing investigation plan. ${TOOL_POLICY}`,
+  "source-audit": `You are PenHub's source-audit specialist. Trace attacker-controlled data to security-sensitive sinks, validate findings against real code paths, and use the Audit pack for semantic, secret, and dependency analysis. Return one compact result with artifact paths; do not create a competing investigation plan. ${TOOL_POLICY}`,
+  binary: `You are PenHub's binary specialist. Perform reverse engineering and exploit development from concrete binary properties. Preserve offsets, mitigations, debugger evidence, and reproducible scripts. Return one compact result with artifact paths; do not create a competing investigation plan. ${TOOL_POLICY}`,
+  forensics: `You are PenHub's forensics specialist. Preserve provenance, identify artifact formats, build timelines, and extract the minimum evidence needed to prove each conclusion. Return one compact result with artifact paths; do not create a competing investigation plan. ${TOOL_POLICY}`,
+  crypto: `You are PenHub's cryptanalysis specialist. Model the construction precisely, test assumptions with small scripts or constraints, and keep recovered parameters and verification steps reproducible. Return one compact result with artifact paths; do not create a competing investigation plan. ${TOOL_POLICY}`,
 }
 
-const STATE_TOOLS = ["penhub_init", "penhub_record", "penhub_state", "penhub_report"] as const
+const STATE_TOOLS = [
+  "penhub_init",
+  "penhub_branch",
+  "record_hypothesis",
+  "penhub_record",
+  "penhub_reflect",
+  "penhub_artifact_read",
+  "verify_candidate",
+  "penhub_state",
+  "penhub_report",
+] as const
+const INTERACTIVE_TOOLS = ["sec_session_start", "sec_session_write", "sec_session_read", "sec_session_stop"] as const
+const SEMANTIC_TOOLS = ["inspect_tree", "summarize_files", "compare_responses"] as const
 
 const PROMPT_COMPACTION = `You are an anchored context summarization assistant for coding sessions.
 
@@ -132,46 +139,64 @@ export const Plugin = define({
     const withTools = (tools: readonly string[]) => [
       ...defaults,
       ...STATE_TOOLS.map((action): PermissionV2.Rule => ({ action, resource: "*", effect: "allow" })),
+      ...INTERACTIVE_TOOLS.map((action): PermissionV2.Rule => ({ action, resource: "*", effect: "allow" })),
+      ...SEMANTIC_TOOLS.map((action): PermissionV2.Rule => ({ action, resource: "*", effect: "allow" })),
       ...tools.map((action): PermissionV2.Rule => ({ action, resource: "*", effect: "allow" })),
     ]
+    const withRawTools = (tools: readonly string[]) => [
+      ...defaults,
+      ...INTERACTIVE_TOOLS.map((action): PermissionV2.Rule => ({ action, resource: "*", effect: "allow" })),
+      ...tools.map((action): PermissionV2.Rule => ({ action, resource: "*", effect: "allow" })),
+    ]
+    const baseline = process.env.PENHUB_BENCHMARK_BASELINE === "1"
+    const rawTools = PenHubToolpack.catalog.flatMap((pack) => pack.tools.map((tool) => tool.name))
 
     yield* ctx.agent.transform((draft) => {
       draft.update(AgentV2.defaultID, (item) => {
-        item.description = "Primary security operator for Web assessment and cross-domain investigation."
+        if (baseline) {
+          item.description = "OpenCode baseline with the same raw tool catalog and no PenHub guidance or state tools."
+          item.mode = "primary"
+          item.color = "primary"
+          item.permissions.push(...withRawTools(rawTools))
+          return
+        }
+        item.description = "Primary cross-domain security operator with the complete PenHub tool catalog."
         item.system ??= OPERATOR_SYSTEM
         item.mode = "primary"
         item.color = "primary"
         item.request.body.toolChoice = "required"
-        item.permissions.push(...withTools([...packTools("web"), ...packTools("browser")]))
+        item.permissions.push(...withTools(rawTools))
       })
 
-      draft.update(AgentV2.ID.make("recon"), (item) => {
-        item.description = "Web reconnaissance, HTTP testing, and browser workflow specialist."
-        item.system = SPECIALIST_SYSTEM.recon
-        item.mode = "subagent"
-        item.color = "info"
-        item.request.body.toolChoice = "required"
-        item.permissions.push(...withTools([...packTools("web"), ...packTools("browser")]))
-      })
-
-      draft.update(AgentV2.ID.make("source-audit"), (item) => {
-        item.description = "Source review, secret detection, and dependency-risk specialist."
-        item.system = SPECIALIST_SYSTEM["source-audit"]
-        item.mode = "subagent"
-        item.color = "success"
-        item.request.body.toolChoice = "required"
-        item.permissions.push(...withTools(packTools("audit")))
-      })
-
-      for (const id of ["binary", "forensics", "crypto"] as const) {
-        draft.update(AgentV2.ID.make(id), (item) => {
-          item.description = `${id[0]?.toUpperCase()}${id.slice(1)} security specialist.`
-          item.system = SPECIALIST_SYSTEM[id]
+      if (!baseline) {
+        draft.update(AgentV2.ID.make("recon"), (item) => {
+          item.description = "Web reconnaissance, HTTP testing, and browser workflow specialist."
+          item.system = SPECIALIST_SYSTEM.recon
           item.mode = "subagent"
-          item.color = id === "binary" ? "warning" : id === "forensics" ? "accent" : "secondary"
+          item.color = "info"
           item.request.body.toolChoice = "required"
-          item.permissions.push(...withTools(packTools(id)))
+          item.permissions.push(...withTools([...packTools("web"), ...packTools("browser")]))
         })
+
+        draft.update(AgentV2.ID.make("source-audit"), (item) => {
+          item.description = "Source review, secret detection, and dependency-risk specialist."
+          item.system = SPECIALIST_SYSTEM["source-audit"]
+          item.mode = "subagent"
+          item.color = "success"
+          item.request.body.toolChoice = "required"
+          item.permissions.push(...withTools(packTools("audit")))
+        })
+
+        for (const id of ["binary", "forensics", "crypto"] as const) {
+          draft.update(AgentV2.ID.make(id), (item) => {
+            item.description = `${id[0]?.toUpperCase()}${id.slice(1)} security specialist.`
+            item.system = SPECIALIST_SYSTEM[id]
+            item.mode = "subagent"
+            item.color = id === "binary" ? "warning" : id === "forensics" ? "accent" : "secondary"
+            item.request.body.toolChoice = "required"
+            item.permissions.push(...withTools(packTools(id)))
+          })
+        }
       }
 
       draft.update(AgentV2.ID.make("compaction"), (item) => {

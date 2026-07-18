@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import {
   createActionRegistry,
-  createDefaultPenHubActionRegistry,
   runPenHubAction,
-} from "@opencode-ai/core/penhub/index"
+} from "@opencode-ai/core/penhub/action-runtime/index"
+import { createDefaultPenHubActionRegistry } from "@opencode-ai/core/penhub/actions/index"
 import { tempWorkspace } from "../helper"
 
 describe("PenHub action registry", () => {

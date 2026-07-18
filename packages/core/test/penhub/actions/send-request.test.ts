@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { sendRequestAction } from "@opencode-ai/core/penhub/index"
+import { sendRequestAction } from "@opencode-ai/core/penhub/actions/core-actions"
 import { tempWorkspace } from "../helper"
 
 describe("PenHub send_request action", () => {

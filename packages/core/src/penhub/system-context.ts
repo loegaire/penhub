@@ -1,12 +1,12 @@
 export * as PenHubSystemContext from "./system-context"
 
-import { access } from "node:fs/promises"
 import { Effect, Layer, Schema } from "effect"
 import { makeLocationNode } from "../effect/node"
 import { Location } from "../location"
 import { SystemContext } from "../system-context"
 import { SystemContextRegistry } from "../system-context/registry"
 import { buildStateCard } from "./context"
+import { PenHubContextCompiler } from "./context/compile"
 import { statePaths } from "./state-paths"
 
 export const layer = Layer.effectDiscard(
@@ -17,12 +17,11 @@ export const layer = Layer.effectDiscard(
       key: SystemContext.Key.make("penhub/attack-state"),
       codec: Schema.toCodecJson(Schema.String),
       load: Effect.promise(async () => {
-        try {
-          await access(statePaths(location.directory).challenge)
-          return await buildStateCard({ workspacePath: location.directory, tokenBudget: 2_000 })
-        } catch {
-          return "# PenHub State Card\n\nNo challenge state has been initialized. Establish the goal, inspect the supplied artifacts or target, then record evidence as work progresses."
-        }
+        const paths = statePaths(location.directory)
+        if (await Bun.file(paths.run).exists()) return PenHubContextCompiler.compileTaskCard(location.directory)
+        if (await Bun.file(paths.challenge).exists())
+          return buildStateCard({ workspacePath: location.directory, tokenBudget: 2_000 })
+        return "# PenHub State Card\n\nNo challenge state has been initialized. Establish the goal, inspect the supplied artifacts or target, then record evidence as work progresses."
       }),
       baseline: (value) => value,
       update: (_previous, value) => value,

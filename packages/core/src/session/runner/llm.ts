@@ -38,6 +38,7 @@ import { MAX_STEPS_PROMPT } from "./max-steps"
 import { Snapshot } from "../../snapshot"
 import { makeLocationNode } from "../../effect/node"
 import { llmClient } from "../../effect/layer-node-platform"
+import { PenHubRunController } from "../../penhub/run/controller"
 
 /**
  * Runs one durable coding-agent Session until it settles.
@@ -196,6 +197,9 @@ export const layer = Layer.effect(
       const context = entries.map((entry) => entry.message)
       const isLastStep = agent.info?.steps !== undefined && currentStep >= agent.info.steps
       const toolMaterialization = isLastStep ? undefined : yield* tools.materialize(agent.info?.permissions)
+      const penhubRequiresAction = yield* Effect.promise(() =>
+        PenHubRunController.requiresAction(location.directory, session.id),
+      )
       const requiresInitialTool =
         currentStep === 1 &&
         agent.info?.request.body.toolChoice === "required" &&
@@ -209,7 +213,7 @@ export const layer = Layer.effect(
           .map(SystemPart.make),
         messages: [...toLLMMessages(context, model), ...(isLastStep ? [Message.assistant(MAX_STEPS_PROMPT)] : [])],
         tools: toolMaterialization?.definitions ?? [],
-        toolChoice: isLastStep ? "none" : requiresInitialTool ? "required" : undefined,
+        toolChoice: isLastStep ? "none" : requiresInitialTool || penhubRequiresAction ? "required" : undefined,
       })
       if (yield* compaction.compactIfNeeded({ sessionID: session.id, entries, model, request }))
         return yield* Effect.die(continueAfterCompaction(currentStep))
@@ -341,7 +345,16 @@ export const layer = Layer.effect(
           if (stream._tag === "Failure") return yield* Effect.failCause(stream.cause)
           if (settled._tag === "Failure" && Cause.hasInterrupts(settled.cause))
             return yield* Effect.failCause(settled.cause)
-          return { needsContinuation: !publisher.hasProviderError() && needsContinuation, step: currentStep }
+          const penhub = yield* Effect.promise(() =>
+            PenHubRunController.afterTurn(location.directory, {
+              sessionId: session.id,
+              canContinue: !isLastStep,
+            }),
+          )
+          return {
+            needsContinuation: !publisher.hasProviderError() && (penhub.managed ? penhub.continue : needsContinuation),
+            step: currentStep,
+          }
         }),
       )
     }, Effect.scoped)

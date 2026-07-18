@@ -69,6 +69,13 @@ export type Attachment = {
   readonly detach: () => void
 }
 
+export type ReadResult = {
+  readonly replay: string
+  readonly cursor: number
+  readonly startCursor: number
+  readonly truncated: boolean
+}
+
 export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Pty.NotFoundError", {
   ptyID: PtyID,
 }) {}
@@ -84,6 +91,7 @@ export interface Interface {
   readonly update: (id: PtyID, input: UpdateInput) => Effect.Effect<Info, NotFoundError>
   readonly remove: (id: PtyID) => Effect.Effect<void, NotFoundError>
   readonly write: (id: PtyID, data: string) => Effect.Effect<void, NotFoundError>
+  readonly read: (id: PtyID, cursor?: number) => Effect.Effect<ReadResult, NotFoundError>
   readonly attach: (id: PtyID, input: AttachInput) => Effect.Effect<Attachment, NotFoundError | ExitedError>
 }
 
@@ -256,6 +264,18 @@ export const layer = Layer.effect(
       if (session.info.status === "running") session.process.write(data)
     })
 
+    const read = Effect.fn("Pty.read")(function* (id: PtyID, cursor?: number) {
+      const session = yield* requireSession(id)
+      const requested = typeof cursor === "number" && Number.isSafeInteger(cursor) ? Math.max(0, cursor) : 0
+      const startCursor = Math.min(session.cursor, Math.max(requested, session.bufferCursor))
+      return {
+        replay: startCursor >= session.cursor ? "" : session.buffer.slice(startCursor - session.bufferCursor),
+        cursor: session.cursor,
+        startCursor,
+        truncated: requested < session.bufferCursor,
+      }
+    })
+
     const attach = Effect.fn("Pty.attach")(function* (id: PtyID, input: AttachInput) {
       const session = yield* requireSession(id)
       if (session.info.status !== "running") return yield* new ExitedError({ ptyID: id })
@@ -309,7 +329,7 @@ export const layer = Layer.effect(
       }
     })
 
-    return Service.of({ list, get, create, update, remove, write, attach })
+    return Service.of({ list, get, create, update, remove, write, read, attach })
   }),
 )
 

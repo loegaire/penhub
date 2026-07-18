@@ -7,6 +7,9 @@ export function compareBenchmarkRuns(input: { baseline: BenchmarkRunResult; penh
   if (input.baseline.model !== input.penhub.model) {
     throw new Error("PenHub benchmark comparisons require the same model")
   }
+  if (input.baseline.modelVariant !== input.penhub.modelVariant) {
+    throw new Error("PenHub benchmark comparisons require the same model variant")
+  }
 
   return {
     caseId: input.baseline.caseId,
@@ -32,6 +35,7 @@ export function renderBenchmarkReport(comparison: BenchmarkComparison) {
     "## Setup",
     `- Case: ${comparison.caseId}`,
     `- Model: ${comparison.model}`,
+    `- Model variant: ${comparison.baseline.modelVariant ?? "default"}`,
     `- Sample fixture: ${comparison.isSampleData ? "yes" : "no"}`,
     comparison.isSampleData
       ? "- Claim status: No measured product claim; this report uses sample fixture data."
@@ -43,8 +47,18 @@ export function renderBenchmarkReport(comparison: BenchmarkComparison) {
     metricRow("solve_success", comparison.baseline.success, comparison.penhub.success, undefined),
     metricRow("flag_found", comparison.baseline.flagFound, comparison.penhub.flagFound, undefined),
     metricRow("tokens_total", comparison.baseline.totalTokens, comparison.penhub.totalTokens, comparison.deltas.tokens),
-    metricRow("duration_seconds", durationSeconds(comparison.baseline), durationSeconds(comparison.penhub), comparison.deltas.timeSeconds),
-    metricRow("tool_calls_count", comparison.baseline.toolCallsCount, comparison.penhub.toolCallsCount, comparison.deltas.toolCalls),
+    metricRow(
+      "duration_seconds",
+      durationSeconds(comparison.baseline),
+      durationSeconds(comparison.penhub),
+      comparison.deltas.timeSeconds,
+    ),
+    metricRow(
+      "tool_calls_count",
+      comparison.baseline.toolCallsCount,
+      comparison.penhub.toolCallsCount,
+      comparison.deltas.toolCalls,
+    ),
     metricRow(
       "repeated_actions_count",
       comparison.baseline.repeatedActionsCount,
@@ -83,11 +97,17 @@ function durationSeconds(run: BenchmarkRunResult) {
 function comparisonConclusion(baseline: BenchmarkRunResult, penhub: BenchmarkRunResult) {
   if (baseline.isSampleData || penhub.isSampleData) return "Sample fixture for harness validation only."
   if (penhub.success && !baseline.success) return "PenHub solved the case where baseline OpenCode did not."
-  if (penhub.success === baseline.success) return "Both runners reached the same solve outcome; inspect efficiency metrics."
+  if (penhub.success === baseline.success)
+    return "Both runners reached the same solve outcome; inspect efficiency metrics."
   return "OpenCode baseline solved the case where PenHub did not."
 }
 
-function metricRow(label: string, baseline: boolean | number | undefined, penhub: boolean | number | undefined, delta: number | undefined) {
+function metricRow(
+  label: string,
+  baseline: boolean | number | undefined,
+  penhub: boolean | number | undefined,
+  delta: number | undefined,
+) {
   return `| ${label} | ${formatMetric(baseline)} | ${formatMetric(penhub)} | ${formatMetric(delta)} |`
 }
 

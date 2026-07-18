@@ -100,6 +100,7 @@ describe("pty", () => {
         yield* pty.update(id, { title: "missing" }).pipe(Effect.asVoid, Effect.exit),
         yield* pty.remove(id).pipe(Effect.exit),
         yield* pty.write(id, "input").pipe(Effect.exit),
+        yield* pty.read(id).pipe(Effect.asVoid, Effect.exit),
         yield* pty.attach(id, { onData: () => {}, onEnd: () => {} }).pipe(Effect.asVoid, Effect.exit),
       ]) {
         expect(Exit.isFailure(result)).toBe(true)
@@ -119,6 +120,7 @@ describe("pty", () => {
       const exited = yield* pty.get(info.id)
       expect(exited.status).toBe("exited")
       expect(exited.exitCode).toBe(3)
+      expect((yield* pty.read(info.id)).cursor).toBeGreaterThanOrEqual(0)
 
       yield* pty.remove(info.id)
       expect(yield* waitForEvents(events, info.id, 1)).toEqual(["deleted"])
@@ -149,6 +151,15 @@ describe("pty", () => {
       const tail = yield* attachCollecting(info.id, -1)
       expect(tail.attachment.replay).toBe("")
       expect(tail.attachment.cursor).toBe(replayed.attachment.cursor)
+
+      const snapshot = yield* pty.read(info.id, first.attachment.cursor)
+      expect(snapshot.replay).toContain("BBB")
+      expect(snapshot.cursor).toBe(replayed.attachment.cursor)
+      expect(snapshot.truncated).toBe(false)
+
+      const future = yield* pty.read(info.id, Number.MAX_SAFE_INTEGER)
+      expect(future.startCursor).toBe(future.cursor)
+      expect(future.replay).toBe("")
     }),
   )
 

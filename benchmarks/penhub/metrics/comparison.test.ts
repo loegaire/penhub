@@ -68,6 +68,13 @@ describe("PenHub benchmark comparison", () => {
         penhub: { ...penhub, model: "other-model" },
       }),
     ).toThrow("same model")
+
+    expect(() =>
+      compareBenchmarkRuns({
+        baseline,
+        penhub: { ...penhub, modelVariant: "high" },
+      }),
+    ).toThrow("same model variant")
   })
 
   test("renders sample-data disclaimers in benchmark reports", () => {

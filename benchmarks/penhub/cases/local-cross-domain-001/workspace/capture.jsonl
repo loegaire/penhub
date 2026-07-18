@@ -1,0 +1,2 @@
+{"timestamp":"2026-07-17T12:00:00.000Z","direction":"client-to-service","request_id":"req-9","method":"POST","path":"/api/recover","headers":{"content-type":"application/json","x-capture-id":"cap-314159"},"body_b64":"eyJzaWduYWwiOiJvcmNoaWQiLCJub25jZSI6IjMxNDE1OSJ9"}
+{"timestamp":"2026-07-17T12:00:00.012Z","direction":"service-to-client","request_id":"req-9","status":403,"body":{"error":"missing x-penhub-proof"}}

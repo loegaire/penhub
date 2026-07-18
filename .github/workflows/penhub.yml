@@ -43,7 +43,7 @@ jobs:
 
       - name: Run benchmark comparison tests
         working-directory: benchmarks/penhub
-        run: bun test ./metrics/comparison.test.ts
+        run: bun test ./metrics
 
       - name: Run ownership tests
         working-directory: scripts/penhub

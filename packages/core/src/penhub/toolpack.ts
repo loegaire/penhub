@@ -1,12 +1,14 @@
 export * as PenHubToolpack from "./toolpack"
 
 import path from "node:path"
+import { randomUUID } from "node:crypto"
 import { mkdir, writeFile } from "node:fs/promises"
 import { PenHub } from "@opencode-ai/schema/penhub"
 import { Duration, Effect, Option, Schema } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { AppProcess } from "../process"
 import { statePaths } from "./state-paths"
+import { PenHubToolResult } from "./tool/result-envelope"
 
 export type Definition = {
   readonly pack: PenHub.ToolPackID
@@ -103,14 +105,14 @@ export const RunInput = Schema.Struct({
 })
 
 export const RunOutput = Schema.Struct({
-  tool: Schema.String,
-  pack: PenHub.ToolPackID,
-  runtime: Runtime,
-  image: Schema.String,
-  exit: Schema.Number,
-  preview: Schema.String,
-  artifactPath: Schema.String,
-  truncated: Schema.Boolean,
+  ...PenHubToolResult.Envelope.fields,
+  toolSpecific: Schema.Struct({
+    pack: PenHub.ToolPackID,
+    runtime: Runtime,
+    image: Schema.String,
+    preview: Schema.String,
+    truncated: Schema.Boolean,
+  }),
 })
 
 export function list(appProcess: AppProcess.Interface) {
@@ -143,9 +145,11 @@ export function run(
   workspace: string,
   definition: Definition,
   input: typeof RunInput.Type,
+  attemptId?: string,
 ) {
   const item = requirePack(definition.pack)
   return Effect.gen(function* () {
+    const started = performance.now()
     const runtime = yield* detectRuntime(appProcess)
     const installed = yield* isInstalled(appProcess, runtime, imageReference(item))
     if (!installed) yield* pullImage(appProcess, runtime, item)
@@ -173,14 +177,47 @@ export function run(
       await writeFile(artifactPath, raw)
     })
     return {
+      id: attemptId ?? `attempt_${randomUUID()}`,
       tool: definition.name,
-      pack: definition.pack,
-      runtime,
-      image: imageReference(item),
-      exit: result.exitCode,
-      preview: preview(raw),
+      status: result.exitCode === 0 ? ("success" as const) : ("error" as const),
+      exitCode: result.exitCode,
+      summary: preview(raw) || `${definition.name} exited with code ${result.exitCode}.`,
       artifactPath: path.relative(workspace, artifactPath),
-      truncated: result.outputTruncated === true || raw.length > 12_000,
+      durationMs: Math.max(0, Math.round(performance.now() - started)),
+      outputBytes: Buffer.byteLength(raw),
+      toolSpecific: {
+        pack: definition.pack,
+        runtime,
+        image: imageReference(item),
+        preview: preview(raw),
+        truncated: result.outputTruncated === true || raw.length > 12_000,
+      },
+    }
+  })
+}
+
+export function prepareInteractive(
+  appProcess: AppProcess.Interface,
+  workspace: string,
+  input: { pack: PenHub.ToolPackID; command: string; args: readonly string[] },
+) {
+  const item = requirePack(input.pack)
+  return Effect.gen(function* () {
+    const runtime = yield* detectRuntime(appProcess)
+    const image = imageReference(item)
+    const installed = yield* isInstalled(appProcess, runtime, image)
+    if (!installed) yield* pullImage(appProcess, runtime, item)
+    return {
+      runtime,
+      image,
+      ...buildRunCommand({
+        runtime,
+        image,
+        workspace,
+        command: input.command,
+        args: input.args,
+        interactive: true,
+      }),
     }
   })
 }
@@ -191,6 +228,7 @@ export function buildRunCommand(input: {
   workspace: string
   command: string
   args: readonly string[]
+  interactive?: boolean
 }) {
   const network = process.platform === "linux" ? ["--network", "host"] : []
   const user =
@@ -203,6 +241,7 @@ export function buildRunCommand(input: {
       "run",
       "--rm",
       "--init",
+      ...(input.interactive ? ["-i", "-t"] : []),
       ...network,
       ...user,
       "-v",

@@ -13,6 +13,9 @@ export type StatePaths = {
   failedAttempts: string
   tokenUsage: string
   report: string
+  run: string
+  attempts: string
+  lessons: string
 }
 
 export function statePaths(workspacePath: string): StatePaths {
@@ -31,5 +34,8 @@ export function statePaths(workspacePath: string): StatePaths {
     failedAttempts: path.join(state, "failed_attempts.jsonl"),
     tokenUsage: path.join(state, "token_usage.json"),
     report: path.join(state, "report.md"),
+    run: path.join(state, "run.json"),
+    attempts: path.join(state, "attempts.jsonl"),
+    lessons: path.join(state, "lessons.jsonl"),
   }
 }

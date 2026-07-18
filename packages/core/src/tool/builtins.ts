@@ -13,6 +13,8 @@ import { ReadToolFileSystem } from "./read-filesystem"
 import { SkillTool } from "./skill"
 import { SecurityTools } from "./security"
 import { PenHubStateTools } from "./penhub-state"
+import { PenHubSemanticTools } from "./penhub-semantic"
+import { PenHubAttemptProjector } from "../penhub/run/projector"
 import { WebFetchTool } from "./webfetch"
 import { WebSearchTool } from "./websearch"
 import { WriteTool } from "./write"
@@ -23,12 +25,14 @@ import { Location } from "../location"
 import { LocationMutation } from "../location-mutation"
 import { FileMutation } from "../file-mutation"
 import { PermissionV2 } from "../permission"
+import { Pty } from "../pty"
 import { Ripgrep } from "../ripgrep"
 import { Image } from "../image"
 import { QuestionV2 } from "../question"
 import { SkillV2 } from "../skill"
 import { ToolRegistry } from "./registry"
 import { httpClient } from "../effect/layer-node-platform"
+import { EventV2 } from "../event"
 
 /**
  * Composes only the shipped Location-scoped built-in tool transforms.
@@ -54,6 +58,8 @@ export const locationLayer = Layer.mergeAll(
   SkillTool.layer,
   SecurityTools.layer,
   PenHubStateTools.layer,
+  PenHubSemanticTools.layer,
+  PenHubAttemptProjector.layer,
   WebFetchTool.layer,
   WebSearchTool.layer.pipe(Layer.provide(WebSearchTool.defaultConfigLayer)),
   WriteTool.layer,
@@ -66,11 +72,13 @@ export const node = makeLocationNode({
     ToolRegistry.toolsNode,
     FSUtil.node,
     AppProcess.node,
+    EventV2.node,
     Config.node,
     Location.node,
     LocationMutation.node,
     FileMutation.node,
     PermissionV2.node,
+    Pty.node,
     Ripgrep.node,
     Image.node,
     QuestionV2.node,

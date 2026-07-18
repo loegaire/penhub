@@ -4,6 +4,7 @@ export type BenchmarkRunResult = {
   runner: BenchmarkRunner
   caseId: string
   model: string
+  modelVariant?: string
   startedAt: string
   finishedAt: string
   success: boolean
@@ -20,6 +21,24 @@ export type BenchmarkRunResult = {
   reportReplayabilityScore?: number
   notes?: string[]
   isSampleData: boolean
+  trial?: number
+  harnessRevision?: string
+  caseRevision?: string
+  sessionId?: string
+  oraclePassed?: boolean
+  replaySuccess?: boolean
+  highestMilestone?: string
+  milestones?: string[]
+  inputTokens?: number
+  outputTokens?: number
+  reasoningTokens?: number
+  toolErrorsCount?: number
+  actionFingerprints?: string[]
+  artifactPaths?: string[]
+  tracePath?: string
+  exitCode?: number
+  timedOut?: boolean
+  observations?: Record<string, unknown>
 }
 
 export type BenchmarkComparison = {
@@ -44,6 +63,7 @@ export function parseBenchmarkRunResult(input: unknown): BenchmarkRunResult {
     runner: asBenchmarkRunner(record.runner),
     caseId: asString(record.caseId, "caseId"),
     model: asString(record.model, "model"),
+    ...(record.modelVariant === undefined ? {} : { modelVariant: asString(record.modelVariant, "modelVariant") }),
     startedAt: asString(record.startedAt, "startedAt"),
     finishedAt: asString(record.finishedAt, "finishedAt"),
     success: asBoolean(record.success, "success"),
@@ -68,6 +88,36 @@ export function parseBenchmarkRunResult(input: unknown): BenchmarkRunResult {
       : { reportReplayabilityScore: asNumber(record.reportReplayabilityScore, "reportReplayabilityScore") }),
     ...(record.notes === undefined ? {} : { notes: asStringArray(record.notes, "notes") }),
     isSampleData: asBoolean(record.isSampleData, "isSampleData"),
+    ...(record.trial === undefined ? {} : { trial: asNumber(record.trial, "trial") }),
+    ...(record.harnessRevision === undefined
+      ? {}
+      : { harnessRevision: asString(record.harnessRevision, "harnessRevision") }),
+    ...(record.caseRevision === undefined ? {} : { caseRevision: asString(record.caseRevision, "caseRevision") }),
+    ...(record.sessionId === undefined ? {} : { sessionId: asString(record.sessionId, "sessionId") }),
+    ...(record.oraclePassed === undefined ? {} : { oraclePassed: asBoolean(record.oraclePassed, "oraclePassed") }),
+    ...(record.replaySuccess === undefined ? {} : { replaySuccess: asBoolean(record.replaySuccess, "replaySuccess") }),
+    ...(record.highestMilestone === undefined
+      ? {}
+      : { highestMilestone: asString(record.highestMilestone, "highestMilestone") }),
+    ...(record.milestones === undefined ? {} : { milestones: asStringArray(record.milestones, "milestones") }),
+    ...(record.inputTokens === undefined ? {} : { inputTokens: asNumber(record.inputTokens, "inputTokens") }),
+    ...(record.outputTokens === undefined ? {} : { outputTokens: asNumber(record.outputTokens, "outputTokens") }),
+    ...(record.reasoningTokens === undefined
+      ? {}
+      : { reasoningTokens: asNumber(record.reasoningTokens, "reasoningTokens") }),
+    ...(record.toolErrorsCount === undefined
+      ? {}
+      : { toolErrorsCount: asNumber(record.toolErrorsCount, "toolErrorsCount") }),
+    ...(record.actionFingerprints === undefined
+      ? {}
+      : { actionFingerprints: asStringArray(record.actionFingerprints, "actionFingerprints") }),
+    ...(record.artifactPaths === undefined
+      ? {}
+      : { artifactPaths: asStringArray(record.artifactPaths, "artifactPaths") }),
+    ...(record.tracePath === undefined ? {} : { tracePath: asString(record.tracePath, "tracePath") }),
+    ...(record.exitCode === undefined ? {} : { exitCode: asNumber(record.exitCode, "exitCode") }),
+    ...(record.timedOut === undefined ? {} : { timedOut: asBoolean(record.timedOut, "timedOut") }),
+    ...(record.observations === undefined ? {} : { observations: asRecord(record.observations, "observations") }),
   }
 }
 

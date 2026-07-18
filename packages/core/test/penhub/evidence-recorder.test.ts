@@ -1,6 +1,7 @@
 import { access } from "node:fs/promises"
 import { describe, expect, test } from "bun:test"
-import { captureEvidence, FileAttackStateStore } from "@opencode-ai/core/penhub/index"
+import { FileAttackStateStore } from "@opencode-ai/core/penhub/index"
+import { captureEvidence } from "@opencode-ai/core/penhub/action-runtime/evidence-recorder"
 import { challenge, tempWorkspace } from "./helper"
 
 describe("PenHub evidence recorder", () => {

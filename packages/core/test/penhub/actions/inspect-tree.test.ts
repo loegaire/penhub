@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { describe, expect, test } from "bun:test"
-import { inspectTreeAction } from "@opencode-ai/core/penhub/index"
+import { inspectTreeAction } from "@opencode-ai/core/penhub/actions/core-actions"
 import { tempWorkspace } from "../helper"
 
 describe("PenHub inspect_tree action", () => {

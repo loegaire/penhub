@@ -1,0 +1,17 @@
+{
+  "id": "local-reverse-001",
+  "category": "reverse-engineering",
+  "promptFile": "TASK.md",
+  "workspace": "workspace",
+  "oracle": ["bun", "oracle.ts"],
+  "resultPattern": "FLAG\\{[^}]+\\}",
+  "wallTimeSeconds": 300,
+  "outputTokenLimit": 8000,
+  "maxAttempts": 5,
+  "milestones": [
+    { "id": "checker-inspected", "kind": "tool-call", "tool": "read" },
+    { "id": "algorithm-identified", "kind": "transcript-pattern", "pattern": "xor|XOR|exclusive" },
+    { "id": "candidate-produced", "kind": "candidate" },
+    { "id": "candidate-verified", "kind": "oracle" }
+  ]
+}
