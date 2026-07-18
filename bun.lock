@@ -671,6 +671,19 @@
         "why-is-node-running": "3.2.2",
       },
     },
+    "packages/penhub-site": {
+      "name": "@penhub-ai/site",
+      "dependencies": {
+        "@tailwindcss/vite": "catalog:",
+        "astro": "5.7.13",
+        "tailwindcss": "catalog:",
+      },
+      "devDependencies": {
+        "@astrojs/check": "0.9.6",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/plugin": {
       "name": "@opencode-ai/plugin",
       "version": "1.17.11",
@@ -2299,6 +2312,8 @@
     "@peculiar/webcrypto": ["@peculiar/webcrypto@1.7.1", "", { "dependencies": { "@peculiar/asn1-schema": "^2.7.0", "@peculiar/json-schema": "^1.1.12", "@peculiar/utils": "^2.0.2", "tslib": "^2.8.1", "webcrypto-core": "^1.9.2" } }, "sha512-ODOov0sGMJMf3jPonOkgGqPknTsu+DdQ7kD++gz8aI+aFMOMHFbWAA2taqXXVTdP+OTOQR/znGvSpmkeI0WTYQ=="],
 
     "@penhub-ai/cli": ["@penhub-ai/cli@workspace:packages/cli"],
+
+    "@penhub-ai/site": ["@penhub-ai/site@workspace:packages/penhub-site"],
 
     "@pierre/diffs": ["@pierre/diffs@1.2.10", "", { "dependencies": { "@pierre/theme": "1.0.3", "@pierre/theming": "0.0.1", "@shikijs/transformers": "^3.0.0 || ^4.0.0", "diff": "8.0.3", "hast-util-to-html": "9.0.5", "lru_map": "0.4.1", "shiki": "^3.0.0 || ^4.0.0" }, "peerDependencies": { "react": "^18.3.1 || ^19.0.0", "react-dom": "^18.3.1 || ^19.0.0" } }, "sha512-rPeAmDWarxFVTQpaf4y6wTxjZxU44xKJKoJti2zU21P06DVd9nRHZX+xSIObLB307Qjpaesyb1x/j0z94t7vLw=="],
 

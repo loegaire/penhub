@@ -1,8 +1,36 @@
-# PenHub
+<p align="center">
+  <img src="icon.png" width="64" height="64" alt="PenHub mark" />
+</p>
+
+<h1 align="center">PenHub</h1>
+
+<p align="center">
+  <strong>Plan the test. Preserve the evidence. Verify the result.</strong>
+</p>
+
+<p align="center">
+  <a href="https://loegaire.github.io/penhub/">Architecture site</a>
+  ·
+  <a href="#quick-start-gui-mode">Run the GUI</a>
+  ·
+  <a href="docs/penhub/runtime-controller.md">Runtime design</a>
+</p>
 
 PenHub is an OpenCode-derived security agent for CTF work, authorized security auditing, reverse engineering, cryptanalysis, and digital forensics. It keeps OpenCode's durable Session V2 runtime and adds security-focused agents, packaged OCI tools, evidence state, and a live browser cockpit.
 
 > Use PenHub only on systems and challenges you own or are explicitly authorized to test.
+
+## Product snapshots
+
+The browser cockpit keeps the active session, workspace files, attack state, and tool packs visible without putting raw logs into model context.
+
+![PenHub session cockpit showing a sample local web investigation](packages/penhub-site/public/screenshots/session-cockpit.png)
+
+The evidence view separates tool-backed observations from interpretation and keeps artifact references attached to the record.
+
+![PenHub evidence view showing sample facts and artifact-backed observations](packages/penhub-site/public/screenshots/evidence-view.png)
+
+These screenshots use the repository's explicitly marked sample workspace data; they are product demonstrations, not benchmark results.
 
 ## What You Can Run
 

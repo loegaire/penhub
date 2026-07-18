@@ -885,9 +885,14 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
         <div class="flex min-w-0 flex-1 flex-col">
           <header class="flex h-11 shrink-0 items-center border-b border-[var(--ph-line)] px-2 sm:px-4">
             <div class="hidden min-w-0 flex-1 items-center gap-3 sm:flex">
-              <strong class="text-[12px] font-bold">
-                PEN<span class="text-[var(--ph-signal)]">/</span>HUB
-              </strong>
+              <div class="flex shrink-0 items-center gap-2" aria-label="PenHub">
+                <span class="grid size-6 place-items-center rounded-md border border-[var(--ph-line)] bg-[#090b0d]">
+                  <img src="/penhub-icon.png" alt="" class="size-4 [image-rendering:pixelated]" />
+                </span>
+                <strong class="text-[12px] font-bold tracking-[0.08em]">
+                  PEN<span class="text-[var(--ph-signal)]">/</span>HUB
+                </strong>
+              </div>
               <span class="h-4 w-px bg-[var(--ph-line)]" />
               <button
                 type="button"

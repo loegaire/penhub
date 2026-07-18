@@ -1,0 +1,29 @@
+---
+import Brand from "./Brand.astro"
+---
+
+<header class="sticky top-0 z-50 border-b border-white/8 bg-ink/85 backdrop-blur-xl">
+  <nav class="site-shell flex h-17 items-center justify-between" aria-label="Main navigation">
+    <Brand compact />
+    <input id="site-nav" type="checkbox" class="peer hidden" />
+    <label
+      for="site-nav"
+      class="grid size-10 cursor-pointer place-items-center rounded-lg border border-line text-muted peer-checked:text-white md:hidden"
+      aria-label="Toggle navigation"
+    >
+      <span class="font-mono text-lg">≡</span>
+    </label>
+    <div
+      class="absolute inset-x-4 top-20 hidden flex-col gap-1 rounded-xl border border-line bg-panel p-3 shadow-2xl peer-checked:flex md:static md:flex md:flex-row md:items-center md:border-0 md:bg-transparent md:p-0 md:shadow-none"
+    >
+      <a class="rounded-lg px-3 py-2 text-sm text-muted hover:bg-white/5 hover:text-white" href="#product">Product</a>
+      <a class="rounded-lg px-3 py-2 text-sm text-muted hover:bg-white/5 hover:text-white" href="#architecture">Architecture</a>
+      <a class="rounded-lg px-3 py-2 text-sm text-muted hover:bg-white/5 hover:text-white" href="#decisions">Decisions</a>
+      <a class="rounded-lg px-3 py-2 text-sm text-muted hover:bg-white/5 hover:text-white" href="#sources">Sources</a>
+      <a
+        class="mt-2 rounded-lg border border-signal/50 bg-signal px-4 py-2 text-center text-sm font-semibold text-white hover:bg-signal-deep md:mt-0 md:ml-2"
+        href="https://github.com/loegaire/penhub"
+      >GitHub ↗</a>
+    </div>
+  </nav>
+</header>

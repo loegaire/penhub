@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #090b0d;
+  --color-panel: #0e1113;
+  --color-panel-soft: #15191b;
+  --color-line: #252a2d;
+  --color-muted: #98a09b;
+  --color-signal: #f05b4f;
+  --color-signal-deep: #d63b30;
+  --color-paper: #f4f4f1;
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+:root {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 20% -10%, rgb(240 91 79 / 16%), transparent 31rem),
+    radial-gradient(circle at 90% 30%, rgb(240 91 79 / 7%), transparent 28rem), #090b0d;
+  color: #eef0ee;
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgb(240 91 79 / 35%);
+  color: white;
+}
+
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.site-shell {
+  width: min(1180px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.eyebrow {
+  color: var(--color-signal);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.grid-noise {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 2.8%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 2.8%) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(to bottom, black, transparent 85%);
+}
+
+.signal-rule {
+  height: 1px;
+  background: linear-gradient(90deg, var(--color-signal), rgb(240 91 79 / 0%));
+}
+
+.source-link {
+  color: #c9cfcb;
+  text-decoration-color: rgb(240 91 79 / 70%);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.source-link:hover {
+  color: white;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    animation: reveal 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .reveal-delay {
+    animation-delay: 120ms;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

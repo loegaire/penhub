@@ -1,0 +1,21 @@
+{
+  "name": "@penhub-ai/site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "catalog:",
+    "astro": "5.7.13",
+    "tailwindcss": "catalog:"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.6",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
