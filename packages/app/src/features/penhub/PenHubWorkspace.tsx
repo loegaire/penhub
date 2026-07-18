@@ -26,6 +26,7 @@ import { createStore } from "solid-js/store"
 import { ACCEPTED_FILE_TYPES, attachmentMime } from "@/components/prompt-input/files"
 import { useServerSDK } from "@/context/server-sdk"
 import { authTokenFromCredentials } from "@/utils/server"
+import { errorFromResponse, formatServerError, isServerError } from "@/utils/server-errors"
 import { loadPenHubState } from "./state/loadPenHubState"
 import { PenHubMarkdown } from "./PenHubMarkdown"
 import "./PenHubWorkspace.css"
@@ -193,7 +194,8 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
   let streamFrame: number | undefined
   let refreshFrame: number | undefined
   const streamDeltas = new Map<string, { messageID: string; partID: string; delta: string }>()
-  const approvedPermissions = new Set<string>()
+  const handledPermissions = new Set<string>()
+  const handledQuestions = new Set<string>()
   const [liveSessions, setLiveSessions] = createStore<Record<string, boolean>>({})
 
   const availableModels = createMemo(() =>
@@ -521,12 +523,7 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
     }
     if (event.type === "permission.v2.asked") {
       if (alwaysApprove()) {
-        if (approvedPermissions.has(event.data.id)) return
-        approvedPermissions.add(event.data.id)
-        void replyPermission(event.data.id, "once").catch((error) => {
-          approvedPermissions.delete(event.data.id)
-          setActivity("error", errorMessage(error))
-        })
+        void replyPermission(event.data, "once").catch((error) => setActivity("error", errorMessage(error)))
         return
       }
       mutatePending((current) => ({
@@ -536,7 +533,6 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
       return
     }
     if (event.type === "permission.v2.replied") {
-      approvedPermissions.delete(event.data.requestID)
       mutatePending((current) =>
         current
           ? { ...current, permissions: current.permissions.filter((request) => request.id !== event.data.requestID) }
@@ -831,26 +827,34 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
     await refetchLiteLLM()
   }
 
-  async function replyPermission(requestID: string, reply: "once" | "always" | "reject") {
-    const id = sessionID()
-    if (!id) return
-    await apiRequest(
+  async function replyPermission(request: PermissionRequest, reply: "once" | "always" | "reject") {
+    if (handledPermissions.has(request.id)) return
+    handledPermissions.add(request.id)
+    const failure = await apiRequest(
       connection(),
-      `/api/session/${encodeURIComponent(id)}/permission/${encodeURIComponent(requestID)}/reply`,
+      `/api/session/${encodeURIComponent(request.sessionID)}/permission/${encodeURIComponent(request.id)}/reply`,
       { method: "POST", body: JSON.stringify({ reply }) },
+    ).then(
+      () => undefined,
+      (error: unknown) => error,
     )
-    await refetchPending()
+    if (!failure || isServerError(failure, "PermissionNotFoundError", request.id)) {
+      mutatePending((current) =>
+        current ? { ...current, permissions: current.permissions.filter((item) => item.id !== request.id) } : current,
+      )
+      if (sessionID() === request.sessionID) await refetchPending()
+      return
+    }
+    handledPermissions.delete(request.id)
+    if (sessionID() === request.sessionID) await refetchPending()
+    throw failure
   }
 
   createEffect(() => {
     if (!alwaysApprove()) return
     const request = pending()?.permissions[0]
-    if (!request || approvedPermissions.has(request.id)) return
-    approvedPermissions.add(request.id)
-    void replyPermission(request.id, "once").catch((error) => {
-      approvedPermissions.delete(request.id)
-      setActivity("error", errorMessage(error))
-    })
+    if (!request) return
+    void replyPermission(request, "once").catch((error) => setActivity("error", errorMessage(error)))
   })
 
   const toggleAlwaysApprove = () => {
@@ -859,15 +863,27 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
     localStorage.setItem("penhub.always-approve", String(next))
   }
 
-  const replyQuestion = async (requestID: string, answers?: readonly (readonly string[])[]) => {
-    const id = sessionID()
-    if (!id) return
-    const path = `/api/session/${encodeURIComponent(id)}/question/${encodeURIComponent(requestID)}`
-    await apiRequest(connection(), answers ? `${path}/reply` : `${path}/reject`, {
+  const replyQuestion = async (request: QuestionRequest, answers?: readonly (readonly string[])[]) => {
+    if (handledQuestions.has(request.id)) return
+    handledQuestions.add(request.id)
+    const path = `/api/session/${encodeURIComponent(request.sessionID)}/question/${encodeURIComponent(request.id)}`
+    const failure = await apiRequest(connection(), answers ? `${path}/reply` : `${path}/reject`, {
       method: "POST",
       body: answers ? JSON.stringify({ answers }) : undefined,
-    })
-    await refetchPending()
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    )
+    if (!failure || isServerError(failure, "QuestionNotFoundError", request.id)) {
+      mutatePending((current) =>
+        current ? { ...current, questions: current.questions.filter((item) => item.id !== request.id) } : current,
+      )
+      if (sessionID() === request.sessionID) await refetchPending()
+      return
+    }
+    handledQuestions.delete(request.id)
+    if (sessionID() === request.sessionID) await refetchPending()
+    throw failure
   }
 
   const connectProvider = async () => {
@@ -923,7 +939,7 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
           <Show when={activity.error}>
             <div class="flex shrink-0 items-center gap-2 border-b border-[var(--ph-signal)] bg-[var(--ph-danger-bg)] px-4 py-2 text-[12px] text-[var(--ph-signal)]">
               <Icon name="warning" size="small" />
-              <span class="min-w-0 flex-1 truncate">{activity.error}</span>
+              <span class="min-w-0 flex-1 break-words">{activity.error}</span>
               <button class="p-1" title="Dismiss" onClick={() => setActivity("error", undefined)}>
                 <Icon name="close" size="small" />
               </button>
@@ -1947,52 +1963,64 @@ function ToolCall(props: { name: string; state: ToolState }) {
 
 function PermissionDock(props: {
   request: PermissionRequest
-  reply: (id: string, reply: "once" | "always" | "reject") => Promise<void>
+  reply: (request: PermissionRequest, reply: "once" | "always" | "reject") => Promise<void>
 }) {
   const [replying, setReplying] = createSignal<"once" | "always" | "reject">()
+  const [failure, setFailure] = createSignal<string>()
   const reply = async (value: "once" | "always" | "reject") => {
     if (replying()) return
     setReplying(value)
-    await props.reply(props.request.id, value).finally(() => setReplying())
+    setFailure()
+    const error = await props.reply(props.request, value).then(
+      () => undefined,
+      (error: unknown) => error,
+    )
+    setReplying()
+    if (error) setFailure(errorMessage(error))
   }
   return (
-    <div class="shrink-0 border-t border-[var(--ph-signal)] bg-[var(--ph-danger-bg)] px-4 py-2.5">
-      <div class="mx-auto flex max-w-[1280px] items-center gap-2">
+    <div class="shrink-0 border-t border-[var(--ph-signal)] bg-[var(--ph-danger-bg)] px-3 py-2.5 sm:px-4">
+      <div class="mx-auto flex max-w-[1280px] flex-wrap items-center gap-2">
         <Icon name="shield" size="small" />
-        <div class="min-w-[180px] flex-1">
+        <div class="min-w-0 flex-1 basis-[180px]">
           <div class="text-[11px] font-semibold">Permission: {props.request.action}</div>
-          <div class="truncate text-[9px] text-[var(--ph-muted)]">{props.request.resources.join(", ")}</div>
+          <div class="break-all text-[9px] text-[var(--ph-muted)]">{props.request.resources.join(", ")}</div>
         </div>
-        <button
-          type="button"
-          class="penhub-control grid size-8 shrink-0 place-items-center rounded-full text-[var(--ph-signal)]"
-          title="Deny"
-          aria-label="Deny permission"
-          disabled={Boolean(replying())}
-          onClick={() => void reply("reject")}
-        >
-          <Icon name="circle-x" size="small" />
-        </button>
-        <button
-          type="button"
-          class="penhub-control grid size-8 shrink-0 place-items-center rounded-full"
-          title="Allow always"
-          aria-label="Always allow this permission"
-          disabled={Boolean(replying())}
-          onClick={() => void reply("always")}
-        >
-          <Icon name="shield" size="small" />
-        </button>
-        <button
-          type="button"
-          class="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ph-ink)] text-[var(--ph-panel)]"
-          title="Allow once"
-          aria-label="Allow permission once"
-          disabled={Boolean(replying())}
-          onClick={() => void reply("once")}
-        >
-          <Icon name="check" size="small" />
-        </button>
+        <div class="ml-auto flex shrink-0 gap-2">
+          <button
+            type="button"
+            class="penhub-control grid size-8 shrink-0 place-items-center rounded-full text-[var(--ph-signal)]"
+            title="Deny"
+            aria-label="Deny permission"
+            disabled={Boolean(replying())}
+            onClick={() => void reply("reject")}
+          >
+            <Icon name="circle-x" size="small" />
+          </button>
+          <button
+            type="button"
+            class="penhub-control grid size-8 shrink-0 place-items-center rounded-full"
+            title="Allow always"
+            aria-label="Always allow this permission"
+            disabled={Boolean(replying())}
+            onClick={() => void reply("always")}
+          >
+            <Icon name="shield" size="small" />
+          </button>
+          <button
+            type="button"
+            class="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ph-ink)] text-[var(--ph-panel)]"
+            title="Allow once"
+            aria-label="Allow permission once"
+            disabled={Boolean(replying())}
+            onClick={() => void reply("once")}
+          >
+            <Icon name="check" size="small" />
+          </button>
+        </div>
+        <Show when={failure()} keyed>
+          {(message) => <div class="basis-full break-words text-[10px] text-[var(--ph-signal)]">{message}</div>}
+        </Show>
       </div>
     </div>
   )
@@ -2000,9 +2028,22 @@ function PermissionDock(props: {
 
 function QuestionDock(props: {
   request: QuestionRequest
-  reply: (id: string, answers?: readonly (readonly string[])[]) => Promise<void>
+  reply: (request: QuestionRequest, answers?: readonly (readonly string[])[]) => Promise<void>
 }) {
   const [answers, setAnswers] = createStore<Record<string, string[]>>({})
+  const [replying, setReplying] = createSignal(false)
+  const [failure, setFailure] = createSignal<string>()
+  const reply = async (answers?: readonly (readonly string[])[]) => {
+    if (replying()) return
+    setReplying(true)
+    setFailure()
+    const error = await props.reply(props.request, answers).then(
+      () => undefined,
+      (error: unknown) => error,
+    )
+    setReplying(false)
+    if (error) setFailure(errorMessage(error))
+  }
   return (
     <div class="max-h-[42vh] shrink-0 overflow-y-auto border-t border-[var(--ph-signal)] bg-[var(--ph-bg)] px-4 py-3">
       <div class="mx-auto max-w-[820px]">
@@ -2055,23 +2096,23 @@ function QuestionDock(props: {
           <button
             type="button"
             class="penhub-control h-8 px-3 text-[10px]"
-            onClick={() => void props.reply(props.request.id)}
+            disabled={replying()}
+            onClick={() => void reply()}
           >
             Reject
           </button>
           <button
             type="button"
             class="h-8 bg-[var(--ph-ink)] px-3 text-[10px] text-[var(--ph-panel)]"
-            onClick={() =>
-              void props.reply(
-                props.request.id,
-                props.request.questions.map((_, index) => answers[String(index)] ?? []),
-              )
-            }
+            disabled={replying()}
+            onClick={() => void reply(props.request.questions.map((_, index) => answers[String(index)] ?? []))}
           >
             Submit answers
           </button>
         </div>
+        <Show when={failure()} keyed>
+          {(message) => <div class="mt-2 break-words text-[10px] text-[var(--ph-signal)]">{message}</div>}
+        </Show>
       </div>
     </div>
   )
@@ -2256,11 +2297,11 @@ function attachmentDataURL(file: File, mime: string) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message
-  if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
-    return error.message
-  }
-  return String(error)
+  const fallback =
+    typeof error === "object" && error !== null && "message" in error && typeof error.message === "string"
+      ? error.message
+      : String(error)
+  return formatServerError(error, undefined, fallback)
 }
 
 function providerErrorMessage(message: string) {
@@ -2282,10 +2323,7 @@ async function apiRequest<T = void>(connection: Connection, path: string, init: 
   for (const [key, value] of new Headers(init.headers)) headers.set(key, value)
   if (init.body !== undefined && !headers.has("content-type")) headers.set("content-type", "application/json")
   const response = await fetch(new URL(path, connection.url), { ...init, headers })
-  if (!response.ok) {
-    const detail = await response.text()
-    throw new Error(detail || `${response.status} ${response.statusText}`)
-  }
+  if (!response.ok) throw await errorFromResponse(response)
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }

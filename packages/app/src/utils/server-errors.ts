@@ -35,6 +35,30 @@ export function formatServerError(error: unknown, translate?: Translator, fallba
   return tr(translate, "error.chain.unknown", "Unknown error")
 }
 
+export async function errorFromResponse(response: Response) {
+  const body: unknown = await response
+    .clone()
+    .json()
+    .catch(() => undefined)
+  const detail =
+    typeof body === "object" &&
+    body !== null &&
+    "message" in body &&
+    typeof body.message === "string" &&
+    body.message.trim()
+      ? body.message
+      : (await response.text()).trim()
+  return new Error(detail || `${response.status} ${response.statusText}`, { cause: { body } })
+}
+
+export function isServerError(error: unknown, tag: string, requestID?: string) {
+  const unwrapped = unwrapNamedError(error)
+  if (typeof unwrapped !== "object" || unwrapped === null) return false
+  if (!("_tag" in unwrapped) || unwrapped._tag !== tag) return false
+  if (requestID === undefined) return true
+  return "requestID" in unwrapped && unwrapped.requestID === requestID
+}
+
 function unwrapNamedError(error: unknown): unknown {
   if (error instanceof Error && error.cause && typeof error.cause === "object" && "body" in error.cause) {
     return (error.cause as Record<string, unknown>).body

@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import type { SessionNotFoundError } from "@opencode-ai/sdk/v2/client"
 import type { ConfigInvalidError, ProviderModelNotFoundError } from "./server-errors"
-import { formatServerError, isSessionNotFoundError, parseReadableConfigInvalidError } from "./server-errors"
+import {
+  errorFromResponse,
+  formatServerError,
+  isServerError,
+  isSessionNotFoundError,
+  parseReadableConfigInvalidError,
+} from "./server-errors"
 
 function fill(text: string, vars?: Record<string, string | number>) {
   if (!vars) return text
@@ -141,6 +147,31 @@ describe("formatServerError", () => {
     const wrapped = new Error("ConfigInvalidError", { cause: { body, status: 400 } })
 
     expect(formatServerError(wrapped, language.t)).toBe("Arquivo de config em config invalido: Missing host")
+  })
+})
+
+describe("errorFromResponse", () => {
+  test("extracts the message and retains a structured server error", async () => {
+    const response = Response.json(
+      {
+        _tag: "PermissionNotFoundError",
+        requestID: "per_stale",
+        message: "Permission request not found: per_stale",
+      },
+      { status: 404 },
+    )
+
+    const error = await errorFromResponse(response)
+
+    expect(error.message).toBe("Permission request not found: per_stale")
+    expect(isServerError(error, "PermissionNotFoundError", "per_stale")).toBe(true)
+    expect(isServerError(error, "PermissionNotFoundError", "per_other")).toBe(false)
+  })
+
+  test("preserves plain text errors", async () => {
+    const error = await errorFromResponse(new Response("Gateway unavailable", { status: 502 }))
+
+    expect(error.message).toBe("Gateway unavailable")
   })
 })
 
