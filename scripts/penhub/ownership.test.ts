@@ -11,7 +11,7 @@ describe("PenHub ownership guard", () => {
           "benchmarks/penhub/metrics/schema.ts",
           "harness/penhub/smoke/smoke-run.ts",
           "scripts/penhub/check-ownership.ts",
-          "docs/penhub/codex-3-handoff.md",
+          "docs/penhub/runtime-controller.md",
           ".github/workflows/penhub.yml",
           "packages/app/src/app.tsx",
         ],
