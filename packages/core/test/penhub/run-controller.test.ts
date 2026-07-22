@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test"
+import { mkdir } from "node:fs/promises"
+import path from "node:path"
 import {
   PenHubContextCompiler,
   PenHubRunController,
   PenHubRunStore,
+  statePaths,
   type PenHubRunState,
 } from "@opencode-ai/core/penhub/index"
 import { tempWorkspace } from "./helper"
@@ -98,6 +101,63 @@ describe("PenHub bounded run controller", () => {
     })
     expect(decision.reason).toContain("skipped reflection")
     expect((await PenHubRunStore.read(workspace))?.status).toBe("blocked")
+  })
+
+  test("stops durable after completed run has no final response pending", async () => {
+    const workspace = await tempWorkspace()
+    await PenHubRunStore.initialize(workspace, { goal: "Recover the flag", sessionId: "session-test" })
+    const run = await PenHubRunStore.read(workspace)
+    if (!run) throw new Error("missing run")
+    await PenHubRunStore.write(workspace, {
+      ...run,
+      status: "solved",
+      finalResponsePending: true,
+      phase: "complete",
+    })
+
+    const firstPass = await PenHubRunController.afterTurn(workspace, { sessionId: "session-test", canContinue: false })
+    expect(firstPass.managed).toBe(true)
+    expect(firstPass.continue).toBe(false)
+
+    const cleared = await PenHubRunStore.read(workspace)
+    expect(cleared?.finalResponsePending).toBe(false)
+    expect(cleared?.status).toBe("solved")
+  })
+
+  test("lets run report once before stopping", async () => {
+    const workspace = await tempWorkspace()
+    await PenHubRunStore.initialize(workspace, { goal: "Recover the flag", sessionId: "session-test" })
+    const run = await PenHubRunStore.read(workspace)
+    if (!run) throw new Error("missing run")
+    await PenHubRunStore.write(workspace, {
+      ...run,
+      status: "blocked",
+      finalResponsePending: true,
+      phase: "complete",
+    })
+
+    const firstPass = await PenHubRunController.afterTurn(workspace, { sessionId: "session-test", canContinue: true })
+    expect(firstPass.managed).toBe(true)
+    expect(firstPass.continue).toBe(true)
+
+    const secondPass = await PenHubRunController.afterTurn(workspace, { sessionId: "session-test", canContinue: true })
+    expect(secondPass.managed).toBe(true)
+    expect(secondPass.continue).toBe(false)
+
+    const finalRun = await PenHubRunStore.read(workspace)
+    expect(finalRun?.finalResponsePending).toBe(false)
+  })
+
+  test("removes the active run state and artifacts with its session", async () => {
+    const workspace = await tempWorkspace()
+    await PenHubRunStore.initialize(workspace, { goal: "Recover the flag", sessionId: "session-test" })
+    const artifact = path.join(statePaths(workspace).artifacts, "tool-runs", "probe.log")
+    await mkdir(path.dirname(artifact), { recursive: true })
+    await Bun.write(artifact, "raw tool output")
+
+    await PenHubRunStore.cleanupSession(workspace, "session-test")
+
+    expect(await Bun.file(statePaths(workspace).root).exists()).toBe(false)
   })
 })
 

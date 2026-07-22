@@ -6,6 +6,8 @@ import type {
   SessionsActiveOutput,
   SessionsGetInput,
   SessionsGetOutput,
+  SessionsRemoveInput,
+  SessionsRemoveOutput,
   SessionsSwitchAgentInput,
   SessionsSwitchAgentOutput,
   SessionsSwitchModelInput,
@@ -69,6 +71,10 @@ import type {
   ServerPenhubListOutput,
   ServerPenhubGetInput,
   ServerPenhubGetOutput,
+  ServerPenhubLoadInput,
+  ServerPenhubLoadOutput,
+  ServerPenhubReadInput,
+  ServerPenhubReadOutput,
   ServerPenhubGenerateInput,
   ServerPenhubGenerateOutput,
   ServerPenhubPullInput,
@@ -268,6 +274,17 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ).then((value) => value.data),
+      remove: (input: SessionsRemoveInput, requestOptions?: RequestOptions) =>
+        request<SessionsRemoveOutput>(
+          {
+            method: "DELETE",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}`,
+            successStatus: 204,
+            declaredStatuses: [404, 400, 401],
+            empty: true,
+          },
+          requestOptions,
+        ),
       switchAgent: (input: SessionsSwitchAgentInput, requestOptions?: RequestOptions) =>
         request<SessionsSwitchAgentOutput>(
           {
@@ -658,6 +675,37 @@ export function make(options: ClientOptions) {
             query: { location: input?.location },
             successStatus: 200,
             declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      load: (input?: ServerPenhubLoadInput, requestOptions?: RequestOptions) =>
+        request<ServerPenhubLoadOutput>(
+          {
+            method: "GET",
+            path: `/api/penhub/explorer`,
+            query: { location: input?.location },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      read: (input: ServerPenhubReadInput, requestOptions?: RequestOptions) =>
+        request<ServerPenhubReadOutput>(
+          {
+            method: "POST",
+            path: `/api/penhub/artifact`,
+            query: { location: input.location },
+            body: {
+              path: input.path,
+              mode: input.mode,
+              offset: input.offset,
+              limit: input.limit,
+              pattern: input.pattern,
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401],
             empty: false,
           },
           requestOptions,

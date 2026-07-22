@@ -1,9 +1,9 @@
 export * as PenHubRunStore from "./store"
 
-import { mkdir, rename, writeFile } from "node:fs/promises"
+import { mkdir, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { Schema } from "effect"
-import { appendJsonl, readJsonl } from "../jsonl"
+import { appendJsonl, readJsonl, writeJsonl } from "../jsonl"
 import { statePaths } from "../state-paths"
 import { Attempt, Lesson, RunState } from "./state"
 
@@ -91,6 +91,33 @@ export async function appendLesson(workspace: string, lesson: Lesson) {
 
 export async function listLessons(workspace: string) {
   return (await readJsonl(statePaths(workspace).lessons)).map((item) => Schema.decodeUnknownSync(Lesson)(item))
+}
+
+export async function cleanupSession(workspace: string, sessionID: string) {
+  const run = await read(workspace)
+  if (run?.sessionId === sessionID) {
+    await rm(statePaths(workspace).root, { recursive: true, force: true })
+    return
+  }
+
+  const attempts = await listAttempts(workspace)
+  const removed = attempts.filter((attempt) => attempt.sessionId === sessionID)
+  if (removed.length === 0) return
+  await writeJsonl(
+    statePaths(workspace).attempts,
+    attempts
+      .filter((attempt) => attempt.sessionId !== sessionID)
+      .map((attempt) => Schema.encodeSync(Attempt)(attempt)),
+  )
+  const artifacts = path.resolve(statePaths(workspace).artifacts)
+  await Promise.all(
+    removed.map(async (attempt) => {
+      if (!attempt.artifactPath) return
+      const target = path.resolve(workspace, attempt.artifactPath)
+      if (target === artifacts || !target.startsWith(`${artifacts}${path.sep}`)) return
+      await rm(target, { force: true })
+    }),
+  )
 }
 
 function errorCode(error: unknown) {

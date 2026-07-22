@@ -18,7 +18,7 @@ export function PenHubMarkdown(props: {
 
   const renderDiagrams = () => {
     const container = root
-    if (!container || !props.text.includes("```")) return
+    if (!container || props.streaming || !/```mermaid(?:\s|$)/i.test(props.text)) return
     const languages = marked
       .lexer(props.text)
       .flatMap((token) => (token.type === "code" ? [token.lang?.split(/\s+/)[0] || "text"] : []))
@@ -38,6 +38,7 @@ export function PenHubMarkdown(props: {
           const { default: mermaid } = await import("mermaid")
           mermaid.initialize({
             startOnLoad: false,
+            suppressErrorRendering: true,
             securityLevel: "strict",
             theme: props.theme === "dark" ? "dark" : "neutral",
             fontFamily: "JetBrainsMono Nerd Font, JetBrains Mono, monospace",
@@ -60,10 +61,10 @@ export function PenHubMarkdown(props: {
             block.querySelector(".penhub-mermaid")?.remove()
             block.appendChild(diagram)
             block.dataset.mermaidRendered = "true"
-          } catch (error) {
+          } catch {
             const message = document.createElement("div")
             message.className = "penhub-mermaid-error"
-            message.textContent = error instanceof Error ? error.message : "Unable to render Mermaid diagram"
+            message.textContent = "Invalid Mermaid diagram. Showing source."
             block.querySelector(".penhub-mermaid-error")?.remove()
             block.appendChild(message)
             delete block.dataset.mermaidRendered
@@ -76,6 +77,7 @@ export function PenHubMarkdown(props: {
     props.text
     props.theme
     props.fontSize
+    props.streaming
     queueMicrotask(renderDiagrams)
   })
 

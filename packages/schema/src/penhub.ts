@@ -1,7 +1,7 @@
 export * as PenHub from "./penhub"
 
 import { Schema } from "effect"
-import { optional } from "./schema"
+import { NonNegativeInt, PositiveInt, optional } from "./schema"
 
 export const ToolPackID = Schema.Literals(["web", "browser", "audit", "binary", "forensics", "crypto"])
 export type ToolPackID = typeof ToolPackID.Type
@@ -114,6 +114,83 @@ const FailedAttempt = Schema.Struct({
   createdAt: Schema.String,
 })
 
+const RunBranch = Schema.Struct({
+  id: Schema.String,
+  claim: Schema.String,
+  nextTest: Schema.String,
+  expectedSignal: Schema.String,
+  status: Schema.Literals(["queued", "active", "supported", "refuted", "blocked"]),
+  attempts: NonNegativeInt,
+  reflectionRetries: NonNegativeInt,
+  createdAt: Schema.String,
+  updatedAt: Schema.String,
+})
+
+const RunFinding = Schema.Struct({
+  id: Schema.String,
+  claim: Schema.String,
+  candidate: Schema.String,
+  verificationMethod: Schema.String,
+  artifactPaths: Schema.Array(Schema.String),
+  verifiedAt: Schema.String,
+})
+
+const RunLesson = Schema.Struct({
+  id: Schema.String,
+  branchId: Schema.String,
+  attemptIds: Schema.Array(Schema.String),
+  failedAssumption: Schema.String,
+  validObservations: Schema.Array(Schema.String),
+  avoid: Schema.String,
+  nextTest: Schema.String,
+  createdAt: Schema.String,
+})
+
+const RunAttempt = Schema.Struct({
+  id: Schema.String,
+  sessionId: Schema.String,
+  callId: Schema.String,
+  branchId: Schema.String.pipe(optional),
+  tool: Schema.String,
+  normalizedArgsHash: Schema.String,
+  status: Schema.Literals(["success", "error", "timeout"]),
+  observation: Schema.String,
+  observationHash: Schema.String,
+  artifactPath: Schema.String.pipe(optional),
+  startedAt: Schema.String,
+  finishedAt: Schema.String,
+  durationMs: NonNegativeInt,
+  outputBytes: NonNegativeInt,
+})
+
+const RunBudgets = Schema.Struct({
+  maxAttempts: PositiveInt,
+  maxProviderTurns: PositiveInt,
+  maxTokens: Schema.Number.pipe(optional),
+})
+
+const RunState = Schema.Struct({
+  version: Schema.Literal(1),
+  goal: Schema.String,
+  sessionId: Schema.String,
+  phase: Schema.Literals(["plan", "act", "verify", "reflect", "complete"]),
+  activeBranchId: Schema.String.pipe(optional),
+  reflectionPendingBranchId: Schema.String.pipe(optional),
+  milestoneIds: Schema.Array(Schema.String),
+  attemptCount: NonNegativeInt,
+  providerTurns: NonNegativeInt,
+  tokenCount: NonNegativeInt,
+  lastDecisionAttemptCount: NonNegativeInt,
+  noProgressTurns: NonNegativeInt,
+  status: Schema.Literals(["active", "solved", "blocked", "budget-exhausted"]),
+  branches: Schema.Array(RunBranch),
+  findings: Schema.Array(RunFinding),
+  budgets: RunBudgets,
+  finalResponsePending: Schema.Boolean,
+  createdAt: Schema.String,
+  updatedAt: Schema.String,
+})
+
 const TokenUsage = Schema.Struct({
   totalInputTokens: Schema.Number,
   totalOutputTokens: Schema.Number,
@@ -140,6 +217,36 @@ export const StateSnapshot = Schema.Struct({
   initialized: Schema.Boolean,
   workspace: WorkspaceState.pipe(optional),
   reportMarkdown: Schema.String.pipe(optional),
+})
+
+export interface PenHubExplorerTabPayload extends Schema.Schema.Type<typeof PenHubExplorerTabPayload> {}
+export const PenHubExplorerTabPayload = Schema.Struct({
+  initialized: Schema.Boolean,
+  workspace: WorkspaceState.pipe(optional),
+  stateCard: Schema.String,
+  run: RunState.pipe(optional),
+  attempts: Schema.Array(RunAttempt),
+  lessons: Schema.Array(RunLesson),
+  findings: Schema.Array(RunFinding),
+})
+
+export interface PenHubArtifactReadInput extends Schema.Schema.Type<typeof PenHubArtifactReadInput> {}
+export const PenHubArtifactReadInput = Schema.Struct({
+  path: Schema.String,
+  mode: Schema.Literals(["head", "tail", "lines", "grep"]),
+  offset: NonNegativeInt.pipe(optional),
+  limit: PositiveInt.pipe(optional),
+  pattern: Schema.String.pipe(optional),
+})
+
+export interface PenHubArtifactReadOutput extends Schema.Schema.Type<typeof PenHubArtifactReadOutput> {}
+export const PenHubArtifactReadOutput = Schema.Struct({
+  path: Schema.String,
+  mode: Schema.String,
+  output: Schema.String,
+  totalLines: NonNegativeInt,
+  returnedLines: NonNegativeInt,
+  truncated: Schema.Boolean,
 })
 
 export interface ReportResult extends Schema.Schema.Type<typeof ReportResult> {}

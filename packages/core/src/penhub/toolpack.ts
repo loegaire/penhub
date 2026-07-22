@@ -311,9 +311,9 @@ function isInstalled(appProcess: AppProcess.Interface, runtime: Runtime | undefi
 function pullImage(appProcess: AppProcess.Interface, runtime: Runtime, item: Pack) {
   return appProcess
     .run(ChildProcess.make(runtime, ["pull", imageReference(item)]), {
-      combineOutput: true,
       timeout: Duration.minutes(30),
       maxOutputBytes: 1024 * 1024,
+      maxErrorBytes: 1024 * 1024,
     })
     .pipe(Effect.flatMap(AppProcess.requireSuccess))
 }

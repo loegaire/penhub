@@ -16,6 +16,7 @@ import {
   type ToolDefinition,
   type ToolContent,
 } from "../schema"
+import { isContextOverflow } from "../provider-error"
 import { isRecord, JsonObject, optionalArray, optionalNull, ProviderShared } from "./shared"
 import { OpenAIOptions } from "./utils/openai-options"
 import { Lifecycle } from "./utils/lifecycle"
@@ -151,10 +152,23 @@ const OpenAIChatChoice = Schema.Struct({
   finish_reason: optionalNull(Schema.String),
 })
 
-const OpenAIChatEvent = Schema.Struct({
+const OpenAIChatChunk = Schema.Struct({
   choices: Schema.Array(OpenAIChatChoice),
   usage: optionalNull(OpenAIChatUsage),
 })
+const OpenAIChatErrorDetails = Schema.StructWithRest(
+  Schema.Struct({
+    code: optionalNull(Schema.String),
+    message: optionalNull(Schema.String),
+    type: optionalNull(Schema.String),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+)
+const OpenAIChatErrorEvent = Schema.StructWithRest(
+  Schema.Struct({ error: Schema.Union([Schema.String, OpenAIChatErrorDetails]) }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+)
+const OpenAIChatEvent = Schema.Union([OpenAIChatErrorEvent, OpenAIChatChunk])
 type OpenAIChatEvent = Schema.Schema.Type<typeof OpenAIChatEvent>
 type OpenAIChatRequestMessage = LLMRequest["messages"][number]
 
@@ -375,12 +389,23 @@ const mapFinishReason = (reason: string | null | undefined): FinishReason => {
   return "unknown"
 }
 
+const providerError = (event: Schema.Schema.Type<typeof OpenAIChatErrorEvent>) => {
+  if (typeof event.error === "string") return LLMEvent.providerError({ message: event.error })
+  const code = event.error.code || event.error.type || undefined
+  const message = event.error.message || undefined
+  const detail = code && message ? `${code}: ${message}` : message || code || "OpenAI Chat stream error"
+  return LLMEvent.providerError({
+    message: detail,
+    classification: code === "context_length_exceeded" || isContextOverflow(detail) ? "context-overflow" : undefined,
+  })
+}
+
 // OpenAI Chat reports `prompt_tokens` (inclusive total) with a
 // `cached_tokens` subset, and `completion_tokens` (inclusive total) with
 // a `reasoning_tokens` subset. We pass the inclusive totals through and
 // derive the non-cached breakdown so the `LLM.Usage` contract is
 // satisfied on both sides.
-const mapUsage = (usage: OpenAIChatEvent["usage"]): Usage | undefined => {
+const mapUsage = (usage: Schema.Schema.Type<typeof OpenAIChatUsage> | null | undefined): Usage | undefined => {
   if (!usage) return undefined
   const cached = usage.prompt_tokens_details?.cached_tokens
   const reasoning = usage.completion_tokens_details?.reasoning_tokens
@@ -398,6 +423,7 @@ const mapUsage = (usage: OpenAIChatEvent["usage"]): Usage | undefined => {
 
 const step = (state: ParserState, event: OpenAIChatEvent) =>
   Effect.gen(function* () {
+    if ("error" in event) return [state, [providerError(event)]] as const
     const events: LLMEvent[] = []
     const usage = mapUsage(event.usage) ?? state.usage
     const choice = event.choices[0]
@@ -480,6 +506,7 @@ export const protocol = Protocol.make({
     event: Protocol.jsonEvent(OpenAIChatEvent),
     initial: () => ({ tools: ToolStream.empty<number>(), toolCallEvents: [], lifecycle: Lifecycle.initial() }),
     step,
+    terminal: (event) => "error" in event,
     onHalt: finishEvents,
   },
 })

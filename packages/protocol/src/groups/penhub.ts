@@ -3,7 +3,7 @@ import { PenHub } from "@opencode-ai/schema/penhub"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { LocationQuery, locationQueryOpenApi } from "./location"
-import { ServiceUnavailableError } from "../errors"
+import { InvalidRequestError, ServiceUnavailableError } from "../errors"
 
 export const PenHubGroup = HttpApiGroup.make("server.penhub")
   .add(
@@ -31,6 +31,36 @@ export const PenHubGroup = HttpApiGroup.make("server.penhub")
           identifier: "v2.penhub.state.get",
           summary: "Get live PenHub state",
           description: "Read the compact attack state and current report from the active workspace.",
+        }),
+      ),
+  )
+  .add(
+    HttpApiEndpoint.get("penhub.explorer.load", "/api/penhub/explorer", {
+      query: LocationQuery,
+      success: Location.response(PenHub.PenHubExplorerTabPayload),
+    })
+      .annotateMerge(locationQueryOpenApi)
+      .annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.penhub.explorer.load",
+          summary: "Get explorer payload for PenHub constructs",
+          description: "Load state-card, run state, attempts, lessons, and findings for UI tab rendering.",
+        }),
+      ),
+  )
+  .add(
+    HttpApiEndpoint.post("penhub.artifact.read", "/api/penhub/artifact", {
+      query: LocationQuery,
+      payload: PenHub.PenHubArtifactReadInput,
+      success: Location.response(PenHub.PenHubArtifactReadOutput),
+      error: InvalidRequestError,
+    })
+      .annotateMerge(locationQueryOpenApi)
+      .annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.penhub.artifact.read",
+          summary: "Read bounded artifact output from the PenHub workspace",
+          description: "Read a bounded artifact window from .penhub/artifacts using head/tail/lines/grep mode.",
         }),
       ),
   )

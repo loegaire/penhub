@@ -113,6 +113,7 @@ export type Error = NotFoundError | MessageDecodeError | OperationUnavailableErr
 export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<SessionSchema.Info[]>
   readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info>
+  readonly remove: (sessionID: SessionSchema.ID) => Effect.Effect<void, NotFoundError>
   readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<SessionSchema.Info, NotFoundError>
   readonly messages: (input: {
     sessionID: SessionSchema.ID
@@ -264,6 +265,37 @@ export const layer = Layer.effect(
         const session = yield* store.get(sessionID)
         if (!session) return yield* new NotFoundError({ sessionID })
         return session
+      }),
+      remove: Effect.fn("V2Session.remove")(function* (sessionID) {
+        const session = yield* result.get(sessionID)
+        yield* execution.interrupt(sessionID)
+        yield* events.publish(
+          SessionV1.Event.Deleted,
+          {
+            sessionID,
+            info: SessionV1.SessionInfo.make({
+              id: session.id,
+              slug: session.id,
+              projectID: session.projectID,
+              workspaceID: session.location.workspaceID,
+              directory: session.location.directory,
+              path: session.subpath,
+              parentID: session.parentID,
+              cost: session.cost,
+              tokens: session.tokens,
+              title: session.title,
+              agent: session.agent,
+              model: session.model,
+              version: InstallationVersion,
+              time: {
+                created: DateTime.toEpochMillis(session.time.created),
+                updated: DateTime.toEpochMillis(session.time.updated),
+                archived: session.time.archived ? DateTime.toEpochMillis(session.time.archived) : undefined,
+              },
+            }),
+          },
+          { location: session.location },
+        )
       }),
       list: Effect.fn("V2Session.list")(function* (input = {}) {
         const direction = input.anchor?.direction ?? "next"

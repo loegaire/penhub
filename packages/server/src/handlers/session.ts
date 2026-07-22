@@ -1,4 +1,6 @@
 import { SessionV2 } from "@opencode-ai/core/session"
+import { Location } from "@opencode-ai/core/location"
+import { PenHubRunStore } from "@opencode-ai/core/penhub/run/store"
 import { DateTime, Effect, Stream } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
@@ -102,6 +104,24 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
               ),
             ),
           }
+        }),
+      )
+      .handle(
+        "session.remove",
+        Effect.fn(function* (ctx) {
+          const location = yield* Location.Service
+          yield* session.remove(ctx.params.sessionID).pipe(
+            Effect.catchTag("Session.NotFoundError", (error) =>
+              Effect.fail(
+                new SessionNotFoundError({
+                  sessionID: error.sessionID,
+                  message: `Session not found: ${error.sessionID}`,
+                }),
+              ),
+            ),
+          )
+          yield* Effect.promise(() => PenHubRunStore.cleanupSession(location.directory, ctx.params.sessionID))
+          return HttpApiSchema.NoContent.make()
         }),
       )
       .handle(

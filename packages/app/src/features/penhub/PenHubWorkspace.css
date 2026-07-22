@@ -2,9 +2,9 @@
   --ph-bg: #f4f4f1;
   --ph-panel: #fbfbf9;
   --ph-ink: #171816;
-  --ph-muted: #71736f;
-  --ph-line: #d8d9d4;
-  --ph-line-strong: #b8bab4;
+  --ph-muted: #535954;
+  --ph-line: #c6c9c2;
+  --ph-line-strong: #979d96;
   --ph-soft: #ecece8;
   --ph-signal: #d63b30;
   --ph-accent-soft: #f8e5e2;
@@ -48,10 +48,10 @@
   --ph-bg: #090b0d;
   --ph-panel: #0e1113;
   --ph-ink: #d9ddd9;
-  --ph-muted: #777f7a;
-  --ph-line: #23282a;
-  --ph-line-strong: #3a4244;
-  --ph-soft: #15191b;
+  --ph-muted: #a1aaa4;
+  --ph-line: #343b3e;
+  --ph-line-strong: #59615f;
+  --ph-soft: #171d20;
   --ph-signal: #f05b4f;
   --ph-accent-soft: #271614;
   --ph-success: #4eb37b;

@@ -98,7 +98,11 @@ export async function afterTurn(
   const run = await PenHubRunStore.read(workspace)
   if (!run || run.sessionId !== input.sessionId) return { managed: false, continue: false }
   if (run.status !== "active") {
-    if (!run.finalResponsePending || !input.canContinue) return { managed: true, continue: false }
+    if (!run.finalResponsePending) return { managed: true, continue: false }
+    if (!input.canContinue) {
+      await PenHubRunStore.write(workspace, { ...run, finalResponsePending: false })
+      return { managed: true, continue: false, reason: `run finished (${run.status})` }
+    }
     await PenHubRunStore.write(workspace, { ...run, finalResponsePending: false })
     return { managed: true, continue: true, reason: `report ${run.status}` }
   }

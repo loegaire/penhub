@@ -31,9 +31,8 @@ const penhub =
               next()
               return
             }
-            response.statusCode = 302
-            response.setHeader("location", `/penhub.html${url.search}`)
-            response.end()
+            request.url = `/penhub.html${url.search}`
+            next()
           })
         },
       } satisfies Plugin)

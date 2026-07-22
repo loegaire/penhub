@@ -70,12 +70,161 @@ type ToolState = Extract<
   Extract<SessionMessageInfo, { type: "assistant" }>["content"][number],
   { type: "tool" }
 >["state"]
+type ExplorerAttempt = {
+  id: string
+  sessionId: string
+  callId: string
+  branchId?: string
+  tool: string
+  normalizedArgsHash: string
+  status: "success" | "error" | "timeout" | string
+  observation: string
+  observationHash: string
+  artifactPath?: string
+  startedAt: string
+  finishedAt: string
+  durationMs: number
+  outputBytes: number
+}
+type ExplorerLesson = {
+  id: string
+  branchId: string
+  attemptIds: readonly string[]
+  failedAssumption: string
+  validObservations: readonly string[]
+  avoid: string
+  nextTest: string
+  createdAt: string
+}
+type ExplorerFinding = {
+  id: string
+  claim: string
+  candidate: string
+  verificationMethod: string
+  artifactPaths: readonly string[]
+  verifiedAt: string
+}
+type ExplorerRunBranch = {
+  id: string
+  goal?: string
+  claim?: string
+  status: "queued" | "active" | "supported" | "refuted" | "blocked" | "open" | "confirmed" | "failed" | "stale" | string
+  attempts?: number
+  novelty?: number | "-Infinity" | "Infinity" | "NaN"
+  confidence?: number | "-Infinity" | "Infinity" | "NaN"
+  progress?: number | "-Infinity" | "Infinity" | "NaN"
+  evidenceIds: readonly string[]
+  updatedAt: string
+}
+type ExplorerRunState = {
+  status: "active" | "solved" | "blocked" | "budget-exhausted"
+  phase: "plan" | "act" | "verify" | "reflect" | "complete"
+  sessionId: string
+  goal: string
+  branches: readonly ExplorerRunBranch[]
+  findings: readonly ExplorerFinding[]
+}
+type ArtifactReadMode = "head" | "tail" | "lines" | "grep"
+type PenHubExplorerTab =
+  | "overview"
+  | "state-card"
+  | "facts"
+  | "hypotheses"
+  | "branches"
+  | "attempts"
+  | "lessons"
+  | "findings"
+  | "artifacts"
+type PenHubMainTab = "session" | "evidence" | PenHubExplorerTab
+type PenHubExplorerPayload = {
+  initialized: boolean
+  workspace: PenHubWorkspaceInfo | undefined
+  stateCard: string
+  run: ExplorerRunState | undefined
+  attempts: readonly ExplorerAttempt[]
+  lessons: readonly ExplorerLesson[]
+  findings: readonly ExplorerFinding[]
+}
+type ArtifactViewerState = {
+  path: string
+  mode: ArtifactReadMode
+  offset: number
+  limit: number
+  pattern?: string
+}
+type ArtifactReadState = {
+  path: string
+  mode: ArtifactReadMode
+  offset: number
+  limit: number
+  pattern?: string
+}
+type ArtifactReadOutput = {
+  path: string
+  mode: ArtifactReadMode
+  output: string
+  totalLines: number
+  returnedLines: number
+  truncated: boolean
+}
+
+async function loadPenHubExplorer(connection: Connection) {
+  return apiRequest<LocationResponse<PenHubExplorerPayload>>(connection, "/api/penhub/explorer").then((response) => response.data)
+}
+
+async function readArtifact(connection: Connection, input: ArtifactReadState) {
+  return apiRequest<LocationResponse<ArtifactReadOutput>>(connection, "/api/penhub/artifact", {
+    method: "POST",
+    body: JSON.stringify({
+      path: input.path,
+      mode: input.mode,
+      offset: input.offset,
+      limit: input.limit,
+      pattern: input.pattern,
+    }),
+  }).then((response) => response.data)
+}
+
+function readArtifactQuery(): ArtifactViewerState | undefined {
+  const params = new URLSearchParams(window.location.search)
+  const path = params.get("artifact")
+  if (!path) return
+  const mode = (params.get("artifactMode") as ArtifactReadMode | null) ?? "tail"
+  const offset = Number(params.get("artifactOffset") ?? 0)
+  const limit = Number(params.get("artifactLimit") ?? 250)
+  const pattern = params.get("artifactPattern") ?? undefined
+  if (!isArtifactMode(mode)) return
+  if (!Number.isFinite(offset) || offset < 0) return
+  if (!Number.isFinite(limit) || limit < 1 || limit > 500) return
+  return { path, mode, offset: Math.floor(offset), limit: Math.floor(limit), pattern }
+}
+
+function readInitialWorkspace() {
+  if (typeof window === "undefined") return ""
+  return window.location.search.replace(/^\?/, "").length > 0
+    ? new URLSearchParams(window.location.search).get("workspace") ?? ""
+    : ""
+}
+
+function readInitialTranscriptFull() {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("transcript") === "full"
+}
+
+function isArtifactMode(value: string): value is ArtifactReadMode {
+  return value === "head" || value === "tail" || value === "lines" || value === "grep"
+}
 
 export default function PenHubWorkspace(props: { serverUrl?: string; workspace?: string } = {}) {
   const serverSDK = props.serverUrl ? undefined : useServerSDK()
-  const [workspaceDirectory, setWorkspaceDirectory] = createSignal(props.workspace?.trim() ?? "")
+  const initialDirectory = props.workspace?.trim() || readInitialWorkspace()
+  const transcriptFull = readInitialTranscriptFull()
+  const [workspaceDirectory, setWorkspaceDirectory] = createSignal(initialDirectory)
   const [workspaceDialog, setWorkspaceDialog] = createSignal(false)
-  const [workspaceInput, setWorkspaceInput] = createSignal(props.workspace?.trim() ?? "")
+  const [workspaceInput, setWorkspaceInput] = createSignal(initialDirectory)
+  const [artifactViewer, setArtifactViewer] = createSignal<ArtifactViewerState | undefined>(readArtifactQuery())
+  const [mainTab, setMainTab] = createSignal<PenHubMainTab>("session")
+  const [timeline, setTimeline] = createStore({ limit: transcriptFull ? Number.MAX_SAFE_INTEGER : 80 })
   const [recentWorkspaces, setRecentWorkspaces] = createSignal(loadRecentWorkspaces())
   const baseConnection = createMemo<Connection>(() => {
     if (props.serverUrl) return { url: props.serverUrl }
@@ -92,6 +241,10 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
   const connection = createMemo(() => connectionAtWorkspace(baseConnection(), workspaceDirectory()))
   const client = createMemo(() => OpenCode.make({ baseUrl: connection().url, headers: connection().headers }))
   const [view, { mutate: mutateView, refetch }] = createResource(client, loadPenHubState)
+  const currentDirectory = createMemo(() => workspaceDirectory() || view()?.state.location.directory || "")
+  const [explorer, { refetch: refetchExplorer }] = createResource(currentDirectory, (directory) =>
+    directory ? loadPenHubExplorer(connection()) : undefined,
+  )
   const [workspaceSessions] = createResource(client, (value) => value.sessions.list({ limit: 100, order: "desc" }))
   const [catalog, { refetch: refetchCatalog }] = createResource(client, async (value) => {
     const [models, integrations] = await Promise.all([value["server.model"].list(), value["server.integration"].list()])
@@ -118,7 +271,6 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
   const [pendingModel, setPendingModel] = createSignal("litellm-proxy/gpt-4o")
   const [integrationID, setIntegrationID] = createSignal("")
   const [apiKey, setApiKey] = createSignal("")
-  const currentDirectory = createMemo(() => workspaceDirectory() || view()?.state.location.directory || "")
   const workspaceChoices = createMemo(() =>
     Array.from(
       new Set(
@@ -192,7 +344,9 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
   let transcriptSession: string | undefined
   let transcriptVersion = ""
   let streamFrame: number | undefined
-  let refreshFrame: number | undefined
+  let refreshTimer: number | undefined
+  let refreshRunning = false
+  let refreshQueued = false
   const streamDeltas = new Map<string, { messageID: string; partID: string; delta: string }>()
   const handledPermissions = new Set<string>()
   const handledQuestions = new Set<string>()
@@ -217,6 +371,8 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
         Number(right.type === "directory") - Number(left.type === "directory") || left.path.localeCompare(right.path),
     ),
   )
+  const visibleMessages = createMemo(() => messages()?.slice(-timeline.limit))
+  const hiddenMessageCount = createMemo(() => Math.max(0, (messages()?.length ?? 0) - timeline.limit))
 
   createEffect(() => {
     if (draftModel()) return
@@ -242,15 +398,32 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
   })
 
   const scheduleContextRefresh = () => {
-    if (refreshFrame !== undefined) return
-    refreshFrame = requestAnimationFrame(() => {
-      refreshFrame = undefined
-      if (!sessionID()) return
-      void Promise.resolve(refetchMessages()).then(() => {
-        if (streamDeltas.size === 0 || streamFrame !== undefined) return
-        streamFrame = requestAnimationFrame(flushStreamDeltas)
-      })
-    })
+    refreshQueued = true
+    if (refreshTimer !== undefined || refreshRunning) return
+    refreshTimer = window.setTimeout(() => {
+      refreshTimer = undefined
+      void flushContextRefresh()
+    }, 50)
+  }
+
+  const flushContextRefresh = async () => {
+    if (!sessionID()) {
+      refreshQueued = false
+      return
+    }
+    refreshRunning = true
+    refreshQueued = false
+    await Promise.resolve(refetchMessages()).then(
+      () => undefined,
+      () => undefined,
+    )
+    await Promise.resolve(refetchExplorer()).then(
+      () => undefined,
+      () => undefined,
+    )
+    refreshRunning = false
+    if (streamDeltas.size > 0 && streamFrame === undefined) streamFrame = requestAnimationFrame(flushStreamDeltas)
+    if (refreshQueued) scheduleContextRefresh()
   }
 
   const flushStreamDeltas = () => {
@@ -258,18 +431,21 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
     const deltas = new Map(streamDeltas)
     streamDeltas.clear()
     const applied = new Set<string>()
+    const touched = new Set([...deltas.values()].map((delta) => delta.messageID))
     mutateMessages((current) =>
       current?.map((message) => {
-        if (message.type !== "assistant") return message
+        if (message.type !== "assistant" || !touched.has(message.id)) return message
+        let changed = false
         const content = message.content.map((part) => {
           const delta = deltas.get(streamPartKey(message.id, part.id))
           if (!delta || delta.messageID !== message.id || (part.type !== "text" && part.type !== "reasoning")) {
             return part
           }
+          changed = true
           applied.add(streamPartKey(message.id, part.id))
           return { ...part, text: part.text + delta.delta }
         })
-        return { ...message, content }
+        return changed ? { ...message, content } : message
       }),
     )
     for (const [key, delta] of deltas) {
@@ -567,6 +743,7 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
       transcriptSession = current
       followTranscript = true
       streamDeltas.clear()
+      setTimeline("limit", transcriptFull ? Number.MAX_SAFE_INTEGER : 80)
     }
     transcriptVersion = nextVersion
     if (!sessionChanged && !contentChanged) return
@@ -610,7 +787,7 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
     window.dispatchEvent(new Event("penhub:activated"))
     onCleanup(() => {
       if (streamFrame !== undefined) cancelAnimationFrame(streamFrame)
-      if (refreshFrame !== undefined) cancelAnimationFrame(refreshFrame)
+      if (refreshTimer !== undefined) clearTimeout(refreshTimer)
       window.removeEventListener("penhub:font-zoom", fontZoom)
       window.removeEventListener("keydown", keydown, true)
       window.removeEventListener("wheel", wheel, true)
@@ -646,7 +823,9 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
     try {
       await action()
       await refetch()
-      if (refreshMessages && sessionID()) await refetchMessages()
+      if (refreshMessages && sessionID()) {
+        await Promise.all([refetchMessages(), Promise.resolve(refetchExplorer())])
+      }
     } catch (error) {
       setActivity("error", errorMessage(error))
     } finally {
@@ -669,8 +848,17 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
         location: sessionLocation(),
       })
       setSelectedSession(created.id)
-      setMode("session")
+      setMainTab("session")
       setMobilePanel()
+    })
+  }
+
+  const deleteSession = async (sessionID: string) => {
+    if (activity.busy) return
+    if (!window.confirm("Delete this session and its PenHub artifacts and logs? This cannot be undone.")) return
+    await runAction("session", async () => {
+      await client().sessions.remove({ sessionID })
+      if (selectedSession() === sessionID) setSelectedSession()
     })
   }
 
@@ -895,6 +1083,58 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
     })
   }
 
+  const setArtifactViewerPath = (next: ArtifactViewerState | undefined) => {
+    const params = new URLSearchParams(window.location.search)
+    if (next) {
+      params.set("artifact", next.path)
+      params.set("artifactMode", next.mode)
+      params.set("artifactOffset", String(next.offset))
+      params.set("artifactLimit", String(next.limit))
+      if (next.pattern) params.set("artifactPattern", next.pattern)
+      else params.delete("artifactPattern")
+      const workspace = currentDirectory()
+      if (workspace) params.set("workspace", workspace)
+    } else {
+      params.delete("artifact")
+      params.delete("artifactMode")
+      params.delete("artifactOffset")
+      params.delete("artifactLimit")
+      params.delete("artifactPattern")
+    }
+    setArtifactViewer(next)
+    const href = `${window.location.pathname}${params.size ? `?${params}` : ""}`
+    window.history.replaceState({}, "", href)
+  }
+
+  const openArtifactTab = (path: string, mode: ArtifactReadMode = "tail") => {
+    const next: ArtifactViewerState = {
+      path,
+      mode,
+      offset: 0,
+      limit: 250,
+    }
+    const params = new URLSearchParams(window.location.search)
+    params.set("workspace", currentDirectory())
+    params.set("artifact", path)
+    params.set("artifactMode", next.mode)
+    params.set("artifactOffset", "0")
+    params.set("artifactLimit", String(next.limit))
+    const target = `${window.location.origin}${window.location.pathname}?${params}`
+    window.open(target, "_blank")
+  }
+
+  const openTranscriptTab = () => {
+    const params = new URLSearchParams(window.location.search)
+    params.set("transcript", "full")
+    const target = `${window.location.origin}${window.location.pathname}?${params}`
+    window.open(target, "_blank")
+  }
+
+  const activeArtifactViewer = artifactViewer()
+  if (activeArtifactViewer) {
+    return <ArtifactExplorer connection={connection()} viewer={activeArtifactViewer} onClose={setArtifactViewerPath} />
+  }
+
   return (
     <main class="penhub" data-theme={theme()} style={{ "--ph-font-size": `${fontSize()}px` }}>
       <div class="flex h-full w-full bg-[var(--ph-panel)]">
@@ -921,13 +1161,20 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
                 <span class="truncate group-hover:text-[var(--ph-signal)]">{currentDirectory() || "Connecting"}</span>
               </button>
             </div>
-            <nav class="flex h-full shrink-0 items-center gap-3 px-1 sm:px-4" aria-label="Workspace view">
-              <Tab active={mode() === "session"} onClick={() => setMode("session")}>
+            <nav class="flex h-full min-w-0 items-center gap-3 overflow-x-auto px-1 sm:px-4" aria-label="Workspace view">
+              <Tab active={mainTab() === "session"} onClick={() => setMainTab("session")}>
                 Session
               </Tab>
-              <Tab active={mode() === "evidence"} onClick={() => setMode("evidence")}>
+              <Tab active={mainTab() === "evidence"} onClick={() => setMainTab("evidence")}>
                 Evidence
               </Tab>
+              <For each={explorerTabs}>
+                {(tab) => (
+                  <Tab active={mainTab() === tab.value} onClick={() => setMainTab(tab.value)}>
+                    {tab.label}
+                  </Tab>
+                )}
+              </For>
             </nav>
             <div class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1 lg:hidden">
               <IconButton icon="folder" label="Switch workspace" onClick={openWorkspaceDialog} mobile />
@@ -981,30 +1228,44 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
                 <div class="min-h-0 flex-1 overflow-y-auto">
                   <For each={rootSessions()} fallback={<Empty label="No sessions in this workspace" compact />}>
                     {(session) => (
-                      <button
-                        type="button"
-                        class={`min-h-14 w-full border-b border-l-2 border-b-[var(--ph-line)] px-3 py-2 text-left ${familyRootID() === session.id ? "border-l-[var(--ph-signal)] bg-[var(--ph-accent-soft)]" : "border-l-transparent hover:bg-[var(--ph-soft)]"}`}
-                        aria-current={familyRootID() === session.id ? "page" : undefined}
-                        onClick={() => {
-                          setSelectedSession(session.id)
-                          setMobilePanel()
-                        }}
+                      <div
+                        class={`group relative min-h-14 border-b border-l-2 border-b-[var(--ph-line)] ${familyRootID() === session.id ? "border-l-[var(--ph-signal)] bg-[var(--ph-accent-soft)]" : "border-l-transparent hover:bg-[var(--ph-soft)]"}`}
                       >
-                        <div class="flex items-center gap-2">
-                          <span
-                            class={`size-1.5 shrink-0 rounded-full ${view()?.active[session.id] || liveSessions[session.id] ? "penhub-live-dot bg-[var(--ph-success)]" : familyRootID() === session.id ? "bg-[var(--ph-signal)]" : "bg-[var(--ph-line-strong)]"}`}
-                          />
-                          <span class="min-w-0 flex-1 truncate text-[11px] font-medium">
-                            {sessionDisplayTitle(session)}
-                          </span>
-                        </div>
-                        <div class="mt-1 flex items-center justify-between gap-2 pl-3.5 text-[9px] text-[var(--ph-muted)]">
-                          <span class="truncate">{session.agent ?? "operator"}</span>
-                          <time class="shrink-0" datetime={new Date(session.time.updated).toISOString()}>
-                            {formatSessionTime(session.time.updated)}
-                          </time>
-                        </div>
-                      </button>
+                        <button
+                          type="button"
+                          class="min-h-14 w-full px-3 py-2 pr-9 text-left"
+                          aria-current={familyRootID() === session.id ? "page" : undefined}
+                          onClick={() => {
+                            setSelectedSession(session.id)
+                            setMobilePanel()
+                          }}
+                        >
+                          <div class="flex items-center gap-2">
+                            <span
+                              class={`size-1.5 shrink-0 rounded-full ${view()?.active[session.id] || liveSessions[session.id] ? "penhub-live-dot bg-[var(--ph-success)]" : familyRootID() === session.id ? "bg-[var(--ph-signal)]" : "bg-[var(--ph-line-strong)]"}`}
+                            />
+                            <span class="min-w-0 flex-1 truncate text-[11px] font-medium">
+                              {sessionDisplayTitle(session)}
+                            </span>
+                          </div>
+                          <div class="mt-1 flex items-center justify-between gap-2 pl-3.5 text-[9px] text-[var(--ph-muted)]">
+                            <span class="truncate">{session.agent ?? "operator"}</span>
+                            <time class="shrink-0" datetime={new Date(session.time.updated).toISOString()}>
+                              {formatSessionTime(session.time.updated)}
+                            </time>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          class="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-[var(--ph-muted)] opacity-0 hover:bg-[var(--ph-danger-bg)] hover:text-[var(--ph-signal)] focus:opacity-100 group-hover:opacity-100"
+                          title="Delete session, artifacts, and logs"
+                          aria-label={`Delete ${sessionDisplayTitle(session)}`}
+                          disabled={Boolean(activity.busy)}
+                          onClick={() => void deleteSession(session.id)}
+                        >
+                          <Icon name="trash" size="small" />
+                        </button>
+                      </div>
                     )}
                   </For>
                 </div>
@@ -1021,7 +1282,6 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
                     void attachWorkspaceFile(entry.path).catch((error) => setActivity("error", errorMessage(error)))
                   }}
                 />
-                <AttackState workspace={view()?.state.data.workspace} />
               </aside>
 
               <section class="flex min-h-0 min-w-0 flex-col bg-[var(--ph-panel)]">
@@ -1063,7 +1323,24 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
                   </div>
                 </div>
 
-                <Show when={mode() === "session"} fallback={<Evidence workspace={view()?.state.data.workspace} />}>
+                <Show
+                  when={mainTab() === "session"}
+                  fallback={
+                    <Show
+                      when={mainTab() === "evidence"}
+                      fallback={
+                        <ExplorerContent
+                          workspace={view()?.state.data.workspace}
+                          explorer={explorer()}
+                          activeTab={mainTab() as PenHubExplorerTab}
+                          openArtifact={openArtifactTab}
+                        />
+                      }
+                    >
+                      <ExplorerEvidence workspace={view()?.state.data.workspace} explorer={explorer()} openArtifact={openArtifactTab} />
+                    </Show>
+                  }
+                >
                   <div
                     ref={transcript}
                     class="min-h-0 flex-1 overflow-y-auto"
@@ -1084,7 +1361,27 @@ export default function PenHubWorkspace(props: { serverUrl?: string; workspace?:
                     }}
                   >
                     <div class="mx-auto w-full max-w-[1280px] px-3 sm:px-4">
-                      <For each={messages()} fallback={<SessionEmpty />}>
+                    <Show when={hiddenMessageCount() > 0}>
+                        <div class="mx-auto my-3 flex w-full max-w-[1280px] gap-2 px-3">
+                          <button
+                            type="button"
+                            class="penhub-control h-8 px-3 text-[10px]"
+                            onClick={() => setTimeline("limit", (limit) => limit + 80)}
+                          >
+                            Load {Math.min(80, hiddenMessageCount())} earlier messages
+                          </button>
+                          <Show when={!transcriptFull}>
+                            <button
+                              type="button"
+                              class="penhub-control h-8 px-3 text-[10px]"
+                              onClick={openTranscriptTab}
+                            >
+                              Open full transcript in new tab
+                            </button>
+                          </Show>
+                        </div>
+                      </Show>
+                      <For each={visibleMessages()} fallback={<SessionEmpty />}>
                         {(message) => (
                           <SessionMessage
                             message={message}
@@ -1729,41 +2026,690 @@ function FileBrowser(props: {
   )
 }
 
-function AttackState(props: { workspace: PenHubWorkspaceInfo }) {
+type ExplorerPayload = PenHubExplorerPayload
+type ArtifactItem = {
+  path: string
+  kind: string
+  source: string
+}
+const explorerTabs: readonly {
+  value: PenHubExplorerTab
+  label: string
+}[] = [
+  { value: "overview", label: "Overview" },
+  { value: "state-card", label: "State" },
+  { value: "facts", label: "Facts" },
+  { value: "hypotheses", label: "Hypotheses" },
+  { value: "branches", label: "Branches" },
+  { value: "attempts", label: "Attempts" },
+  { value: "lessons", label: "Lessons" },
+  { value: "findings", label: "Findings" },
+  { value: "artifacts", label: "Artifacts" },
+]
+
+function ExplorerContent(props: {
+  workspace: PenHubWorkspaceInfo | undefined
+  explorer: PenHubExplorerPayload | undefined
+  activeTab: PenHubExplorerTab
+  openArtifact: (path: string, mode?: ArtifactReadMode) => void
+}) {
   return (
-    <section class="max-h-[42%] shrink-0 overflow-y-auto border-t border-[var(--ph-line)]">
-      <div class="flex h-9 items-center justify-between border-b border-[var(--ph-line)] px-3">
-        <h3 class="text-[10px] font-bold uppercase">Attack state</h3>
-        <span class="text-[9px] text-[var(--ph-muted)]">{props.workspace?.challenge.type ?? "idle"}</span>
-      </div>
-      <Show when={props.workspace} keyed fallback={<Empty label="No active challenge" compact />}>
-        {(workspace) => (
-          <div class="p-3">
-            <div class="text-[12px] font-semibold">{workspace.challenge.name}</div>
-            <p class="mt-1 text-[10px] leading-4 text-[var(--ph-muted)]">{workspace.challenge.goal}</p>
-            <For each={workspace.branches}>
-              {(branch) => (
-                <div class="mt-3 border-l-2 border-[var(--ph-line)] pl-2">
-                  <div class="flex gap-2 text-[10px]">
-                    <span class="min-w-0 flex-1 truncate">{branch.goal}</span>
-                    <span class="text-[9px] text-[var(--ph-muted)]">{branch.status}</span>
-                  </div>
-                  <div class="mt-1 h-0.5 bg-[var(--ph-soft)]">
-                    <div
-                      class="h-full bg-[var(--ph-signal)]"
-                      style={{ width: `${Math.max(0, Math.min(100, Number(branch.progress) * 100))}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </For>
-          </div>
-        )}
+    <section class="min-h-0 flex-1 overflow-y-auto bg-[var(--ph-panel)]">
+      <Show when={props.explorer?.initialized} fallback={<Empty label="No live PenHub payload yet" compact />}>
+        <Switch>
+          <Match when={props.activeTab === "overview"}>
+            <ExplorerOverview workspace={props.workspace} explorer={props.explorer} />
+          </Match>
+          <Match when={props.activeTab === "state-card"}>
+            <ExplorerStateCard explorer={props.explorer} />
+          </Match>
+          <Match when={props.activeTab === "facts"}>
+            <ExplorerFacts workspace={props.workspace} />
+          </Match>
+          <Match when={props.activeTab === "hypotheses"}>
+            <ExplorerHypotheses workspace={props.workspace} />
+          </Match>
+          <Match when={props.activeTab === "branches"}>
+            <ExplorerBranches workspace={props.workspace} run={props.explorer?.run} />
+          </Match>
+          <Match when={props.activeTab === "attempts"}>
+            <ExplorerAttempts explorer={props.explorer} openArtifact={props.openArtifact} />
+          </Match>
+          <Match when={props.activeTab === "lessons"}>
+            <ExplorerLessons explorer={props.explorer} />
+          </Match>
+          <Match when={props.activeTab === "findings"}>
+            <ExplorerFindings explorer={props.explorer} openArtifact={props.openArtifact} />
+          </Match>
+          <Match when={props.activeTab === "artifacts"}>
+            <ExplorerArtifacts workspace={props.workspace} explorer={props.explorer} openArtifact={props.openArtifact} />
+          </Match>
+        </Switch>
       </Show>
     </section>
   )
 }
 
+function ExplorerOverview(props: { workspace?: PenHubWorkspaceInfo; explorer?: PenHubExplorerPayload }) {
+  const labels = () => {
+    const workspace = props.workspace
+    const run = props.explorer?.run
+    return {
+      facts: workspace?.facts.length ?? 0,
+      hypotheses: workspace?.hypotheses.length ?? 0,
+      branches: workspace?.branches.length ?? 0,
+      evidence: workspace?.evidence.length ?? 0,
+      attempts: props.explorer?.attempts.length ?? 0,
+      lessons: props.explorer?.lessons.length ?? 0,
+      findings: props.explorer?.findings.length ?? 0,
+      run: run ? `${run.status} / ${run.phase}` : "no active run",
+    }
+  }
+
+  return (
+    <div class="px-3 py-2">
+      <Show
+        when={props.workspace}
+        fallback={<p class="py-8 text-center text-[10px] text-[var(--ph-muted)]">Initialize a challenge to view details.</p>}
+      >
+        {(workspace) => (
+          <>
+            <div class="mb-2 border-b border-[var(--ph-line)] pb-2">
+              <h4 class="text-[12px] font-semibold">{workspace().challenge.name}</h4>
+              <p class="mt-1 text-[10px] leading-4 text-[var(--ph-muted)]">{workspace().challenge.goal}</p>
+              <p class="mt-1 text-[9px] text-[var(--ph-muted)]">Type: {workspace().challenge.type}</p>
+            </div>
+            <dl class="grid grid-cols-2 gap-x-3 gap-y-2 text-[10px]">
+              <dt class="text-[var(--ph-muted)]">Facts</dt>
+              <dd>{labels().facts}</dd>
+              <dt class="text-[var(--ph-muted)]">Hypotheses</dt>
+              <dd>{labels().hypotheses}</dd>
+              <dt class="text-[var(--ph-muted)]">Branches</dt>
+              <dd>{labels().branches}</dd>
+              <dt class="text-[var(--ph-muted)]">Evidence</dt>
+              <dd>{labels().evidence}</dd>
+              <dt class="text-[var(--ph-muted)]">Attempts</dt>
+              <dd>{labels().attempts}</dd>
+              <dt class="text-[var(--ph-muted)]">Lessons</dt>
+              <dd>{labels().lessons}</dd>
+              <dt class="text-[var(--ph-muted)]">Findings</dt>
+              <dd>{labels().findings}</dd>
+              <dt class="text-[var(--ph-muted)]">Run</dt>
+              <dd>{labels().run}</dd>
+            </dl>
+            <Show when={workspace().tokenUsage?.totalTokens ?? 0}>
+              {(tokens) => <p class="mt-2 border-t border-[var(--ph-line)] pt-2 text-[9px] text-[var(--ph-muted)]">Tokens: {tokens()}</p>}
+            </Show>
+          </>
+        )}
+      </Show>
+    </div>
+  )
+}
+
+function asNumber(value: number | string | undefined) {
+  const next = Number(value)
+  return Number.isFinite(next) ? next : 0
+}
+
+function ExplorerStateCard(props: { explorer?: ExplorerPayload }) {
+  return (
+    <div class="px-3 py-2">
+      <p class="mb-2 text-[9px] uppercase text-[var(--ph-muted)]">Current compact state card</p>
+      <PenHubMarkdown
+        text={props.explorer?.stateCard ?? "No state card available yet."}
+        cacheKey="state-card"
+        theme="dark"
+        fontSize={11}
+        streaming={false}
+      />
+    </div>
+  )
+}
+
+function ExplorerFacts(props: { workspace?: PenHubWorkspaceInfo }) {
+  const facts = () => props.workspace?.facts ?? []
+  return (
+    <div class="px-3 py-2">
+      <Show
+        when={facts().length}
+        fallback={<p class="py-8 text-center text-[10px] text-[var(--ph-muted)]">No facts recorded yet.</p>}
+      >
+        <For each={facts()}>
+          {(fact) => (
+            <article class="mb-2 border-l-2 border-[var(--ph-line)] pl-2">
+              <div class="text-[11px] leading-5">{fact.claim}</div>
+              <div class="mt-1 flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-[9px] text-[var(--ph-muted)]">
+                <span>{fact.source}</span>
+                <span>{Math.round(asNumber(fact.confidence) * 100)}%</span>
+                <span>{fact.id}</span>
+              </div>
+            </article>
+          )}
+        </For>
+      </Show>
+    </div>
+  )
+}
+
+function ExplorerHypotheses(props: { workspace?: PenHubWorkspaceInfo }) {
+  const hypotheses = () => props.workspace?.hypotheses ?? []
+  return (
+    <div class="px-3 py-2">
+      <Show
+        when={hypotheses().length}
+        fallback={<p class="py-8 text-center text-[10px] text-[var(--ph-muted)]">No hypotheses proposed yet.</p>}
+      >
+        <For each={hypotheses()}>
+          {(hypothesis) => (
+            <article class="mb-3 border-b border-[var(--ph-line)] pb-2 last:mb-0 last:border-b-0 last:pb-0">
+              <div class="flex flex-wrap items-center gap-1">
+                <span class={`px-1.5 py-0.5 text-[8px] uppercase ${statusPill(hypothesis.status)}`}>{hypothesis.status}</span>
+                <span class="text-[9px] text-[var(--ph-muted)]">id:{hypothesis.id}</span>
+                <span class="ml-auto text-[9px] text-[var(--ph-muted)]">{Math.round(asNumber(hypothesis.confidence) * 100)}%</span>
+              </div>
+              <p class="mt-1 text-[11px] leading-5">{hypothesis.claim}</p>
+              <Show when={hypothesis.nextTest}>
+                <p class="mt-1 text-[10px] leading-4 text-[var(--ph-muted)]">Next: {hypothesis.nextTest}</p>
+              </Show>
+              <Show when={hypothesis.requiredEvidence.length}>
+                <p class="mt-1 text-[9px] text-[var(--ph-muted)]">
+                  Supports: {hypothesis.requiredEvidence.join(", ")}
+                </p>
+              </Show>
+            </article>
+          )}
+        </For>
+      </Show>
+    </div>
+  )
+}
+
+type ExplorerBranchRow = {
+  id: string
+  status: string
+  confidence: number
+  progress: number
+  novelty: number
+  attempts: number
+  goal: string
+  evidenceIds: readonly string[]
+  updatedAt: string
+}
+
+function ExplorerBranches(props: { workspace?: PenHubWorkspaceInfo; run?: ExplorerRunState }) {
+  const rows = () => {
+    const branches = props.run?.branches ?? props.workspace?.branches ?? []
+    return branches.map((branch) => {
+      const runBranch = branch as ExplorerRunBranch
+      return {
+        id: branch.id,
+        status: branch.status,
+        confidence: asNumber(runBranch.confidence),
+        progress: asNumber(runBranch.progress),
+        novelty: asNumber(runBranch.novelty),
+        attempts: runBranch.attempts ?? 0,
+        goal: runBranch.goal ?? runBranch.claim ?? "",
+        evidenceIds: runBranch.evidenceIds,
+        updatedAt: branch.updatedAt,
+      } satisfies ExplorerBranchRow
+    })
+  }
+  const orderedBranches = () =>
+    [...rows()].toSorted((left, right) => {
+      const rank = { queued: 0, active: 1, supported: 2, open: 3, confirmed: 4, refuted: 5, failed: 6, stale: 7, blocked: 8 }
+      const leftRank = rank[left.status as keyof typeof rank] ?? 99
+      const rightRank = rank[right.status as keyof typeof rank] ?? 99
+      if (leftRank !== rightRank) return leftRank - rightRank
+      return right.updatedAt.localeCompare(left.updatedAt)
+    })
+
+  return (
+    <div class="px-3 py-2">
+      <Show
+        when={orderedBranches().length}
+        fallback={<p class="py-8 text-center text-[10px] text-[var(--ph-muted)]">No branches yet.</p>}
+      >
+        <For each={orderedBranches()}>
+          {(branch, index) => {
+            const hasChildren = index() < orderedBranches().length - 1
+            return (
+              <div class="relative border-l border-[var(--ph-line)] pl-3 py-2 last:border-l-0">
+                <span
+                  class={`absolute left-[-3px] top-5 h-2 w-2 rounded-full ${
+                    branch.status === "active" || branch.status === "supported" || branch.status === "queued"
+                      ? "bg-[var(--ph-signal)]"
+                      : "bg-[var(--ph-muted)]"
+                  }`}
+                />
+                <Show when={index() !== 0}>
+                  <span class="absolute left-[-3px] top-0 h-3 border-l-2 border-[var(--ph-line)]" />
+                </Show>
+                <Show when={hasChildren}>
+                  <span class="absolute left-[-3px] top-5 h-3 border-l border-[var(--ph-line)]" />
+                </Show>
+                <div class="text-[11px] leading-5">
+                  <div class="flex items-center gap-2">
+                    <span class={`text-[9px] uppercase ${statusPill(branch.status)}`}>{branch.status}</span>
+                    <span class="truncate">{branch.id}</span>
+                    <span class="ml-auto text-[9px] text-[var(--ph-muted)]">{Math.round(branch.confidence * 100)}%</span>
+                  </div>
+                  <p class="mt-1 text-[11px] text-[var(--ph-ink)]">{branch.goal}</p>
+                  <p class="mt-1 text-[9px] text-[var(--ph-muted)]">Novelty: {branch.novelty.toFixed(2)}</p>
+                </div>
+                <div class="mt-1 h-1.5 overflow-hidden rounded-sm bg-[var(--ph-soft)]">
+                  <div
+                    class="h-full bg-[var(--ph-signal)]"
+                    style={{ width: `${Math.max(0, Math.min(100, branch.progress * 100))}%` }}
+                  />
+                </div>
+                <div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[9px] text-[var(--ph-muted)]">
+                  <span>Attempts: {branch.attempts}</span>
+                  <span>Evidence: {branch.evidenceIds.length}</span>
+                  <span>Refl: {branch.novelty.toFixed(2)}</span>
+                </div>
+              </div>
+            )
+          }}
+        </For>
+      </Show>
+    </div>
+  )
+}
+
+function ExplorerAttempts(props: { explorer?: ExplorerPayload; openArtifact: (path: string, mode?: ArtifactReadMode) => void }) {
+  const attempts = () => props.explorer?.attempts ?? []
+  return (
+    <div class="px-3 py-2">
+      <Show
+        when={attempts().length}
+        fallback={<p class="py-8 text-center text-[10px] text-[var(--ph-muted)]">No tool attempts yet.</p>}
+      >
+        <For each={attempts()}>
+          {(attempt) => (
+            <article class="mb-3 border-b border-[var(--ph-line)] pb-2 last:mb-0 last:border-b-0 last:pb-0">
+              <div class="flex items-center gap-2">
+                <span class={`px-1.5 py-0.5 text-[8px] uppercase ${statusPill(attempt.status)}`}>{attempt.status}</span>
+                <span class="truncate text-[11px]">{attempt.tool}</span>
+                <span class="ml-auto text-[9px] text-[var(--ph-muted)]">{attempt.id}</span>
+              </div>
+              <p class="mt-1 text-[10px] text-[var(--ph-muted)]">{attempt.observation}</p>
+              <div class="mt-1 text-[9px] text-[var(--ph-muted)]">
+                <span>Branch: {attempt.branchId ?? "unscoped"}</span>
+                <Show when={attempt.artifactPath}>
+                  <button
+                    type="button"
+                    class="ml-2 underline"
+                    title={`Open ${attempt.artifactPath}`}
+                    onClick={() => props.openArtifact(attempt.artifactPath ?? "", "tail")}
+                  >
+                    Open artifact
+                  </button>
+                </Show>
+              </div>
+            </article>
+          )}
+        </For>
+      </Show>
+    </div>
+  )
+}
+
+function ExplorerLessons(props: { explorer?: ExplorerPayload }) {
+  const lessons = () => props.explorer?.lessons ?? []
+  return (
+    <div class="px-3 py-2">
+      <Show
+        when={lessons().length}
+        fallback={<p class="py-8 text-center text-[10px] text-[var(--ph-muted)]">No lessons yet.</p>}
+      >
+        <For each={lessons()}>
+          {(lesson) => (
+            <article class="mb-3 border-b border-[var(--ph-line)] pb-2 last:mb-0 last:border-b-0 last:pb-0">
+              <p class="text-[11px] leading-5">{lesson.failedAssumption}</p>
+              <p class="mt-1 text-[10px] text-[var(--ph-muted)]">Next: {lesson.nextTest}</p>
+              <p class="mt-1 text-[9px] text-[var(--ph-muted)]">Avoid: {lesson.avoid}</p>
+              <p class="mt-1 text-[9px] text-[var(--ph-muted)]">Observed attempts: {lesson.attemptIds.join(", ") || "none"}</p>
+            </article>
+          )}
+        </For>
+      </Show>
+    </div>
+  )
+}
+
+function ExplorerFindings(props: { explorer?: ExplorerPayload; openArtifact: (path: string, mode?: ArtifactReadMode) => void }) {
+  const findings = () => props.explorer?.findings ?? []
+  return (
+    <div class="px-3 py-2">
+      <Show
+        when={findings().length}
+        fallback={<p class="py-8 text-center text-[10px] text-[var(--ph-muted)]">No verified findings yet.</p>}
+      >
+        <For each={findings()}>
+          {(finding) => (
+            <article class="mb-3 border-b border-[var(--ph-line)] pb-2 last:mb-0 last:border-b-0 last:pb-0">
+              <p class="text-[11px] leading-5">{finding.claim}</p>
+              <div class="mt-1 text-[10px] text-[var(--ph-muted)]">Candidate: {finding.candidate}</div>
+              <div class="mt-1 text-[9px] text-[var(--ph-muted)]">Method: {finding.verificationMethod}</div>
+              <Show when={finding.artifactPaths.length > 0}>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <For each={finding.artifactPaths}>
+                    {(path) => (
+                      <button
+                        type="button"
+                        class="underline text-[9px]"
+                        title={`Open ${path}`}
+                        onClick={() => props.openArtifact(path, "tail")}
+                      >
+                        {path}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </article>
+          )}
+        </For>
+      </Show>
+    </div>
+  )
+}
+
+function ExplorerArtifacts(props: {
+  workspace?: PenHubWorkspaceInfo
+  explorer?: ExplorerPayload
+  openArtifact: (path: string, mode?: ArtifactReadMode) => void
+}) {
+  const artifacts = () => collectArtifacts(props.workspace, props.explorer)
+  return (
+    <div class="px-3 py-2">
+      <Show
+        when={artifacts().length}
+        fallback={<p class="py-8 text-center text-[10px] text-[var(--ph-muted)]">No artifacts recorded yet.</p>}
+      >
+        <For each={artifacts()}>
+          {(artifact) => (
+            <button
+              type="button"
+              class="mb-2 w-full rounded border border-[var(--ph-line)] px-2 py-1.5 text-left text-[10px] hover:bg-[var(--ph-soft)]"
+              onClick={() => props.openArtifact(artifact.path, "tail")}
+            >
+              <div class="flex gap-2 text-[9px] text-[var(--ph-muted)]">
+                <span>{artifact.kind}</span>
+                <span>·</span>
+                <span>{artifact.source}</span>
+              </div>
+              <p class="mt-1 truncate font-semibold">{artifact.path}</p>
+            </button>
+          )}
+        </For>
+      </Show>
+    </div>
+  )
+}
+
+function ExplorerEvidence(props: { workspace?: PenHubWorkspaceInfo; explorer?: ExplorerPayload; openArtifact: (path: string, mode?: ArtifactReadMode) => void }) {
+  return (
+    <div class="min-h-0 flex-1 overflow-y-auto">
+      <div class="mx-auto w-full max-w-[820px] px-4 sm:px-7">
+        <Show
+          when={props.workspace}
+          fallback={<Empty label="No workspace state initialized." />}
+        >
+          <div class="space-y-3 py-2">
+            <ExplorerOverview workspace={props.workspace} explorer={props.explorer} />
+            <div class="border-t border-[var(--ph-line)] pt-3" />
+            <ExplorerFacts workspace={props.workspace} />
+            <div class="border-t border-[var(--ph-line)] pt-3" />
+            <ExplorerHypotheses workspace={props.workspace} />
+            <div class="border-t border-[var(--ph-line)] pt-3" />
+            <ExplorerBranches workspace={props.workspace} />
+            <div class="border-t border-[var(--ph-line)] pt-3" />
+            <ExplorerFindings explorer={props.explorer} openArtifact={props.openArtifact} />
+            <div class="border-t border-[var(--ph-line)] pt-3" />
+            <ExplorerArtifacts workspace={props.workspace} explorer={props.explorer} openArtifact={props.openArtifact} />
+          </div>
+        </Show>
+      </div>
+    </div>
+  )
+}
+
+function statusPill(status: string) {
+  if (status === "active" || status === "confirmed" || status === "queued" || status === "supported" || status === "success")
+    return "bg-[var(--ph-accent-soft)] text-[var(--ph-ink)]"
+  if (
+    status === "error" ||
+    status === "failed" ||
+    status === "rejected" ||
+    status === "blocked" ||
+    status === "refuted"
+  )
+    return "bg-[var(--ph-danger-bg)] text-[var(--ph-signal)]"
+  if (status === "open" || status === "testing" || status === "reflect") return "bg-[var(--ph-soft)] text-[var(--ph-muted)]"
+  return "bg-[var(--ph-soft)] text-[var(--ph-muted)]"
+}
+
+function collectArtifacts(workspace: PenHubWorkspaceInfo | undefined, explorer?: ExplorerPayload): ArtifactItem[] {
+  const paths = new Map<string, ArtifactItem>()
+
+  for (const evidence of workspace?.evidence ?? []) {
+    if (!evidence.artifactPath) continue
+    paths.set(evidence.artifactPath, { path: evidence.artifactPath, kind: evidence.type, source: "evidence" })
+  }
+  for (const attempt of explorer?.attempts ?? []) {
+    if (!attempt.artifactPath) continue
+    paths.set(attempt.artifactPath, { path: attempt.artifactPath, kind: "tool-run", source: "attempt" })
+  }
+  for (const lesson of explorer?.lessons ?? []) {
+    for (const attemptID of lesson.attemptIds) {
+      const attempt = explorer?.attempts.find((item) => item.id === attemptID)
+      if (attempt?.artifactPath) {
+        paths.set(attempt.artifactPath, { path: attempt.artifactPath, kind: "lesson", source: "lesson" })
+      }
+    }
+  }
+  for (const finding of explorer?.findings ?? []) {
+    for (const path of finding.artifactPaths) {
+      paths.set(path, { path, kind: "finding", source: "verified-finding" })
+    }
+  }
+  return [...paths.values()].sort((left, right) => left.path.localeCompare(right.path))
+}
+
+function ArtifactExplorer(props: { connection: Connection; viewer: ArtifactViewerState; onClose: (next?: ArtifactViewerState) => void }) {
+  const [viewer, setViewer] = createStore({
+    path: props.viewer.path,
+    mode: props.viewer.mode,
+    offset: props.viewer.offset,
+    limit: props.viewer.limit,
+    pattern: props.viewer.pattern ?? "",
+  })
+  const hasPattern = () => viewer.mode === "grep"
+  const offset = () => viewer.offset
+  const limit = () => viewer.limit
+  const [artifactState, { refetch: refetchArtifact }] = createResource(
+    () => ({ path: viewer.path, mode: viewer.mode, offset: viewer.offset, limit: viewer.limit, pattern: viewer.pattern }),
+    (input) =>
+      readArtifact(props.connection, {
+        path: input.path,
+        mode: input.mode,
+        offset: input.offset,
+        limit: input.limit,
+        pattern: input.pattern || undefined,
+      }),
+  )
+  const artifact = () => artifactState()
+
+  createEffect(() => {
+    setViewer("path", props.viewer.path)
+    setViewer("mode", props.viewer.mode)
+    setViewer("offset", props.viewer.offset)
+    setViewer("limit", props.viewer.limit)
+    setViewer("pattern", props.viewer.pattern ?? "")
+  })
+
+  const pageBack = () => {
+    const nextOffset = Math.max(0, offset() - limit())
+    setViewer("offset", nextOffset)
+    void refetchArtifact()
+    props.onClose({ ...viewer, offset: nextOffset, pattern: viewer.pattern || undefined })
+  }
+  const pageForward = () => {
+    const total = artifact()?.totalLines ?? 0
+    const nextOffset = Math.min(offset() + limit(), Math.max(0, total - limit()))
+    setViewer("offset", nextOffset)
+    void refetchArtifact()
+    props.onClose({ ...viewer, offset: nextOffset, pattern: viewer.pattern || undefined })
+  }
+  const mode = () => viewer.mode
+  const canForward = () => offset() + limit() < (artifact()?.totalLines ?? 0)
+  const canBack = () => offset() > 0
+
+  const applyPattern = (pattern: string) => {
+    setViewer("pattern", pattern)
+    if (mode() === "grep") void refetchArtifact()
+  }
+
+  const applyMode = (next: ArtifactReadMode) => {
+    setViewer("mode", next)
+    setViewer("offset", 0)
+    void refetchArtifact()
+    props.onClose({ ...viewer, mode: next, offset: 0 })
+  }
+
+  const applyLimit = (value: string) => {
+    const parsed = Number.parseInt(value)
+    if (!Number.isFinite(parsed)) return
+    const next = Math.max(1, Math.min(500, parsed))
+    setViewer("limit", next)
+    setViewer("offset", 0)
+    void refetchArtifact()
+    props.onClose({ ...viewer, limit: next, offset: 0 })
+  }
+
+  const applyOffset = (value: string) => {
+    const parsed = Number.parseInt(value)
+    if (!Number.isFinite(parsed)) return
+    setViewer("offset", Math.max(0, parsed))
+    void refetchArtifact()
+    props.onClose({ ...viewer, offset: Math.max(0, parsed) })
+  }
+
+  return (
+    <section class="penhub h-dvh">
+      <div class="mx-auto flex h-full max-w-[1280px] flex-col">
+        <header class="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--ph-line)] px-3">
+          <h1 class="text-[11px] font-bold">Artifact Explorer</h1>
+          <button
+            type="button"
+            class="ml-auto penhub-control grid size-8 shrink-0 place-items-center rounded-full"
+            title="Close"
+            onClick={() => props.onClose()}
+          >
+            <Icon name="close" size="small" />
+          </button>
+        </header>
+        <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
+          <div class="mb-2 grid gap-2 text-[10px] sm:grid-cols-[minmax(0,1fr)_max-content_max-content]">
+            <input
+              class="penhub-control h-8 min-w-0 px-2"
+              value={viewer.path}
+              onInput={(event) => setViewer("path", event.currentTarget.value)}
+              placeholder="Artifact path"
+            />
+            <select
+              class="penhub-control h-8 px-2"
+              value={mode()}
+              onChange={(event) => applyMode(event.currentTarget.value as ArtifactReadMode)}
+            >
+              <option value="tail">tail</option>
+              <option value="head">head</option>
+              <option value="lines">lines</option>
+              <option value="grep">grep</option>
+            </select>
+              <button class="penhub-control h-8 px-2" onClick={() => void refetchArtifact()}>
+              Reload
+            </button>
+          </div>
+          <div class="mb-2 grid gap-2 text-[10px] sm:grid-cols-[minmax(0,1fr)_minmax(0,100px)_minmax(0,100px)]">
+            <Show when={hasPattern()}>
+              <input
+                class="penhub-control h-8 px-2"
+                value={viewer.pattern}
+                placeholder="grep pattern (regex)"
+                onInput={(event) => applyPattern(event.currentTarget.value)}
+              />
+            </Show>
+            <Show when={!hasPattern()}>
+              <span class="h-8" />
+            </Show>
+            <label class="inline-flex items-center gap-1 border border-[var(--ph-line)] px-2">
+              <span class="text-[9px] text-[var(--ph-muted)]">Limit</span>
+              <input
+                class="h-8 min-w-0 bg-transparent text-right text-[10px] outline-none"
+                value={limit()}
+                type="number"
+                min="1"
+                max="500"
+                onInput={(event) => applyLimit(event.currentTarget.value)}
+              />
+            </label>
+            <label class="inline-flex items-center gap-1 border border-[var(--ph-line)] px-2">
+              <span class="text-[9px] text-[var(--ph-muted)]">Offset</span>
+              <input
+                class="h-8 min-w-0 bg-transparent text-right text-[10px] outline-none"
+                value={offset()}
+                type="number"
+                min="0"
+                onInput={(event) => applyOffset(event.currentTarget.value)}
+              />
+            </label>
+          </div>
+          <Show when={artifact()} keyed>
+            {(entry) => (
+              <div class="mb-2 flex flex-wrap items-center gap-2 text-[9px] text-[var(--ph-muted)]">
+                <span>{entry.mode} mode</span>
+                <span>offset {offset()}</span>
+                <span>returned {entry.returnedLines}</span>
+                <span>total {entry.totalLines}</span>
+                <Show when={entry.truncated}>
+                  <span>truncated</span>
+                </Show>
+              </div>
+            )}
+          </Show>
+          <div class="mb-2 flex gap-2">
+            <button
+              type="button"
+              class="penhub-control h-7 px-2 text-[9px] disabled:opacity-40"
+              disabled={!canBack()}
+              onClick={pageBack}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              class="penhub-control h-7 px-2 text-[9px] disabled:opacity-40"
+              disabled={!canForward()}
+              onClick={pageForward}
+            >
+              Forward
+            </button>
+          </div>
+          <Show when={artifact()} fallback={<Empty label="No artifact content" compact />} keyed>
+            {(entry) => (
+              <pre class="min-h-0 flex-1 overflow-auto rounded border border-[var(--ph-line)] bg-[var(--ph-bg)] p-2 text-[10px] leading-4">
+                {entry.output}
+              </pre>
+            )}
+          </Show>
+        </div>
+      </div>
+    </section>
+  )
+}
 function SessionEmpty() {
   return (
     <div class="grid min-h-[320px] place-items-center py-12 text-center">
@@ -1832,18 +2778,13 @@ function SessionMessage(props: {
                       </Match>
                       <Match when={part.type === "reasoning" && part}>
                         {(item) => (
-                          <details class="border-l-2 border-[var(--ph-line)] pl-3" open={props.streaming}>
-                            <summary class="cursor-pointer text-[9px] font-bold uppercase text-[var(--ph-muted)]">
-                              Thinking
-                            </summary>
-                            <PenHubMarkdown
-                              text={item().text}
-                              cacheKey={item().id}
-                              theme={props.theme}
-                              fontSize={props.fontSize}
-                              streaming={props.streaming}
-                            />
-                          </details>
+                          <ReasoningPart
+                            id={item().id}
+                            text={item().text}
+                            theme={props.theme}
+                            fontSize={props.fontSize}
+                            streaming={props.streaming}
+                          />
                         )}
                       </Match>
                       <Match when={part.type === "tool" && part}>
@@ -1889,6 +2830,52 @@ function SessionMessage(props: {
   )
 }
 
+function ReasoningPart(props: {
+  id: string
+  text: string
+  theme: "light" | "dark"
+  fontSize: number
+  streaming: boolean
+}) {
+  const [state, setState] = createStore({ open: props.streaming })
+  let wasStreaming = props.streaming
+
+  createEffect(() => {
+    const streaming = props.streaming
+    if (streaming) setState("open", true)
+    if (!streaming && wasStreaming) setState("open", false)
+    wasStreaming = streaming
+  })
+
+  return (
+    <details
+      class="border-l-2 border-[var(--ph-line)] pl-3"
+      open={state.open}
+      onToggle={(event) => setState("open", event.currentTarget.open)}
+    >
+      <summary class="cursor-pointer text-[9px] font-bold uppercase text-[var(--ph-muted)]">Thinking</summary>
+      <Show when={state.open}>
+        <Show
+          when={!props.streaming}
+          fallback={
+            <pre class="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-[var(--ph-muted)]">
+              {props.text.slice(-6000)}
+            </pre>
+          }
+        >
+          <PenHubMarkdown
+            text={props.text}
+            cacheKey={props.id}
+            theme={props.theme}
+            fontSize={props.fontSize}
+            streaming={false}
+          />
+        </Show>
+      </Show>
+    </details>
+  )
+}
+
 function MessageAttachments(props: { files?: readonly MessageFile[] }) {
   return (
     <Show when={props.files?.length}>
@@ -1926,6 +2913,10 @@ function MessageAttachments(props: { files?: readonly MessageFile[] }) {
 }
 
 function ToolCall(props: { name: string; state: ToolState }) {
+  const [details, setDetails] = createStore({ open: props.state.status === "error" })
+  createEffect(() => {
+    if (props.state.status === "error") setDetails("open", true)
+  })
   const output = () => {
     if (props.state.status === "pending") return
     const text = props.state.content
@@ -1939,24 +2930,30 @@ function ToolCall(props: { name: string; state: ToolState }) {
     }
   }
   return (
-    <details class="border border-[var(--ph-line)] bg-[var(--ph-bg)]" open={props.state.status === "error"}>
+    <details
+      class="border border-[var(--ph-line)] bg-[var(--ph-bg)]"
+      open={details.open}
+      onToggle={(event) => setDetails("open", event.currentTarget.open)}
+    >
       <summary class="flex cursor-pointer list-none items-center gap-2 px-3 py-2">
         <Icon name="terminal" size="small" />
         <code class="min-w-0 flex-1 truncate text-[11px] font-semibold">{props.name}</code>
         <Status value={props.state.status} />
       </summary>
-      <div class="border-t border-[var(--ph-line)] p-3">
-        <pre class="max-h-40 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-[var(--ph-muted)]">
-          {formatUnknown(props.state.input)}
-        </pre>
-        <Show when={output()} keyed>
-          {(value) => (
-            <pre class="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words border-t border-[var(--ph-line)] pt-3 text-[10px] leading-4">
-              {value}
-            </pre>
-          )}
-        </Show>
-      </div>
+      <Show when={details.open}>
+        <div class="border-t border-[var(--ph-line)] p-3">
+          <pre class="max-h-40 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-[var(--ph-muted)]">
+            {formatUnknown(props.state.input)}
+          </pre>
+          <Show when={output()} keyed>
+            {(value) => (
+              <pre class="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words border-t border-[var(--ph-line)] pt-3 text-[10px] leading-4">
+                {value}
+              </pre>
+            )}
+          </Show>
+        </div>
+      </Show>
     </details>
   )
 }
@@ -2333,7 +3330,16 @@ async function consumeEvents(
   signal: AbortSignal,
   receive: (event: EventsSubscribeOutput) => void,
 ) {
-  for await (const event of client.events.subscribe({ signal })) receive(event)
+  let handled = 0
+  let started = performance.now()
+  for await (const event of client.events.subscribe({ signal })) {
+    receive(event)
+    handled++
+    if (handled < 32 && performance.now() - started < 6) continue
+    await new Promise<void>((resolve) => setTimeout(resolve))
+    handled = 0
+    started = performance.now()
+  }
 }
 
 async function readWorkspaceFile(connection: Connection, directory: string, path: string) {

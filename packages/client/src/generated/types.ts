@@ -291,6 +291,10 @@ export type SessionsGetOutput = {
   }
 }["data"]
 
+export type SessionsRemoveInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type SessionsRemoveOutput = void
+
 export type SessionsSwitchAgentInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
   readonly agent: { readonly agent: string }["agent"]
@@ -2238,6 +2242,231 @@ export type ServerPenhubGetOutput = {
       }
     }
     readonly reportMarkdown?: string
+  }
+}
+
+export type ServerPenhubLoadInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ServerPenhubLoadOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly initialized: boolean
+    readonly workspace?: {
+      readonly challenge: {
+        readonly id: string
+        readonly name: string
+        readonly type: "web" | "crypto" | "pwn" | "rev" | "misc" | "cloud" | "unknown"
+        readonly goal: string
+        readonly workspacePath: string
+        readonly createdAt: string
+      }
+      readonly facts: ReadonlyArray<{
+        readonly id: string
+        readonly source: "source" | "runtime" | "tool" | "model" | "manual"
+        readonly claim: string
+        readonly confidence: number | "Infinity" | "-Infinity" | "NaN"
+        readonly evidenceIds: ReadonlyArray<string>
+        readonly branchId?: string
+        readonly hypothesisId?: string
+        readonly createdAt: string
+      }>
+      readonly hypotheses: ReadonlyArray<{
+        readonly id: string
+        readonly claim: string
+        readonly status: "open" | "testing" | "confirmed" | "failed" | "stale"
+        readonly requiredEvidence: ReadonlyArray<string>
+        readonly nextTest?: string
+        readonly confidence: number | "Infinity" | "-Infinity" | "NaN"
+        readonly branchId?: string
+        readonly createdAt: string
+        readonly updatedAt: string
+      }>
+      readonly branches: ReadonlyArray<{
+        readonly id: string
+        readonly goal: string
+        readonly status: "open" | "active" | "blocked" | "confirmed" | "failed" | "stale"
+        readonly confidence: number | "Infinity" | "-Infinity" | "NaN"
+        readonly progress: number | "Infinity" | "-Infinity" | "NaN"
+        readonly novelty: number | "Infinity" | "-Infinity" | "NaN"
+        readonly tokenCost: number | "Infinity" | "-Infinity" | "NaN"
+        readonly repetitionPenalty: number | "Infinity" | "-Infinity" | "NaN"
+        readonly evidenceIds: ReadonlyArray<string>
+        readonly hypothesisIds: ReadonlyArray<string>
+        readonly createdAt: string
+        readonly updatedAt: string
+      }>
+      readonly evidence: ReadonlyArray<{
+        readonly id: string
+        readonly type: "file" | "http" | "log" | "runtime" | "diff" | "flag" | "manual"
+        readonly summary: string
+        readonly artifactPath?: string
+        readonly hash?: string
+        readonly supports: ReadonlyArray<string>
+        readonly branchId?: string
+        readonly hypothesisId?: string
+        readonly createdAt: string
+      }>
+      readonly failedAttempts: ReadonlyArray<{
+        readonly id: string
+        readonly summary: string
+        readonly reason: string
+        readonly branchId?: string
+        readonly hypothesisId?: string
+        readonly actionId?: string
+        readonly createdAt: string
+      }>
+      readonly tokenUsage: {
+        readonly totalInputTokens: number | "Infinity" | "-Infinity" | "NaN"
+        readonly totalOutputTokens: number | "Infinity" | "-Infinity" | "NaN"
+        readonly totalTokens: number | "Infinity" | "-Infinity" | "NaN"
+        readonly byBranch: { readonly [x: string]: number | "Infinity" | "-Infinity" | "NaN" }
+        readonly byAction: { readonly [x: string]: number | "Infinity" | "-Infinity" | "NaN" }
+        readonly byHypothesis: { readonly [x: string]: number | "Infinity" | "-Infinity" | "NaN" }
+        readonly compressionRatio?: number | "Infinity" | "-Infinity" | "NaN"
+      }
+    }
+    readonly stateCard: string
+    readonly run?: {
+      readonly version: 1
+      readonly goal: string
+      readonly sessionId: string
+      readonly phase: "plan" | "act" | "verify" | "reflect" | "complete"
+      readonly activeBranchId?: string
+      readonly reflectionPendingBranchId?: string
+      readonly milestoneIds: ReadonlyArray<string>
+      readonly attemptCount: number
+      readonly providerTurns: number
+      readonly tokenCount: number
+      readonly lastDecisionAttemptCount: number
+      readonly noProgressTurns: number
+      readonly status: "active" | "solved" | "blocked" | "budget-exhausted"
+      readonly branches: ReadonlyArray<{
+        readonly id: string
+        readonly claim: string
+        readonly nextTest: string
+        readonly expectedSignal: string
+        readonly status: "queued" | "active" | "supported" | "refuted" | "blocked"
+        readonly attempts: number
+        readonly reflectionRetries: number
+        readonly createdAt: string
+        readonly updatedAt: string
+      }>
+      readonly findings: ReadonlyArray<{
+        readonly id: string
+        readonly claim: string
+        readonly candidate: string
+        readonly verificationMethod: string
+        readonly artifactPaths: ReadonlyArray<string>
+        readonly verifiedAt: string
+      }>
+      readonly budgets: {
+        readonly maxAttempts: number
+        readonly maxProviderTurns: number
+        readonly maxTokens?: number | "Infinity" | "-Infinity" | "NaN"
+      }
+      readonly finalResponsePending: boolean
+      readonly createdAt: string
+      readonly updatedAt: string
+    }
+    readonly attempts: ReadonlyArray<{
+      readonly id: string
+      readonly sessionId: string
+      readonly callId: string
+      readonly branchId?: string
+      readonly tool: string
+      readonly normalizedArgsHash: string
+      readonly status: "success" | "error" | "timeout"
+      readonly observation: string
+      readonly observationHash: string
+      readonly artifactPath?: string
+      readonly startedAt: string
+      readonly finishedAt: string
+      readonly durationMs: number
+      readonly outputBytes: number
+    }>
+    readonly lessons: ReadonlyArray<{
+      readonly id: string
+      readonly branchId: string
+      readonly attemptIds: ReadonlyArray<string>
+      readonly failedAssumption: string
+      readonly validObservations: ReadonlyArray<string>
+      readonly avoid: string
+      readonly nextTest: string
+      readonly createdAt: string
+    }>
+    readonly findings: ReadonlyArray<{
+      readonly id: string
+      readonly claim: string
+      readonly candidate: string
+      readonly verificationMethod: string
+      readonly artifactPaths: ReadonlyArray<string>
+      readonly verifiedAt: string
+    }>
+  }
+}
+
+export type ServerPenhubReadInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly path: {
+    readonly path: string
+    readonly mode: "head" | "tail" | "lines" | "grep"
+    readonly offset?: number
+    readonly limit?: number
+    readonly pattern?: string
+  }["path"]
+  readonly mode: {
+    readonly path: string
+    readonly mode: "head" | "tail" | "lines" | "grep"
+    readonly offset?: number
+    readonly limit?: number
+    readonly pattern?: string
+  }["mode"]
+  readonly offset?: {
+    readonly path: string
+    readonly mode: "head" | "tail" | "lines" | "grep"
+    readonly offset?: number
+    readonly limit?: number
+    readonly pattern?: string
+  }["offset"]
+  readonly limit?: {
+    readonly path: string
+    readonly mode: "head" | "tail" | "lines" | "grep"
+    readonly offset?: number
+    readonly limit?: number
+    readonly pattern?: string
+  }["limit"]
+  readonly pattern?: {
+    readonly path: string
+    readonly mode: "head" | "tail" | "lines" | "grep"
+    readonly offset?: number
+    readonly limit?: number
+    readonly pattern?: string
+  }["pattern"]
+}
+
+export type ServerPenhubReadOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly path: string
+    readonly mode: string
+    readonly output: string
+    readonly totalLines: number
+    readonly returnedLines: number
+    readonly truncated: boolean
   }
 }
 

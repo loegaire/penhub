@@ -15,7 +15,7 @@ export default Runtime.handler(
           availablePort(input.hostname, input.guiPort === apiPort ? input.guiPort + 1 : input.guiPort),
         )
         const apiUrl = `http://${input.hostname}:${apiPort}`
-        const guiUrl = `http://${input.hostname}:${guiPort}/penhub.html`
+        const guiUrl = `http://${input.hostname}:${guiPort}/`
         const liteLLMConfig = process.env.PENHUB_LITELLM_CONFIG ?? path.join(os.homedir(), "ctf/litellm_config.yaml")
         const processes = yield* Effect.acquireRelease(
           Effect.sync(() => ({
@@ -44,6 +44,7 @@ export default Runtime.handler(
               [
                 process.execPath,
                 "run",
+                `--cwd=${path.resolve(import.meta.dir, "../../../../app")}`,
                 "dev",
                 "--",
                 "--host",
@@ -53,7 +54,6 @@ export default Runtime.handler(
                 "--strictPort",
               ],
               {
-                cwd: path.resolve(import.meta.dir, "../../../../app"),
                 env: { ...process.env, PENHUB_GUI: "1", VITE_PENHUB_SERVER_URL: apiUrl },
                 stdin: "inherit",
                 stdout: "inherit",
